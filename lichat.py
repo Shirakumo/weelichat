@@ -167,10 +167,10 @@ def handle_input(client, line):
 
 def on_misc(client, u):
     if isinstance(u, Failure):
-        dst = my_buffer
         if isinstance(u, UpdateFailure):
-            dst = my_buffers.get(redir_id_to_buffer.pop(u['update-id'], None), my_buffer)
-        w.prnt(dst, f"{w.prefix('error')}ERROR: {u.text}")
+            u['channel'] = redir_id_to_buffer.pop(u['update-id'], None)
+        u['channel'] = u.get('channel', None) or my_client.servername or my_buffer
+        show(u, kind='error')
 
 def on_message(client, u):
     redir_id_to_buffer.pop(u['id'], None)
