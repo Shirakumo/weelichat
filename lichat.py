@@ -26,6 +26,9 @@ except ImportError as message:
     print('Missing package(s) for %s: %s' % (SCRIPT_NAME, message))
     import_ok = False
 
+## We can't display emotes, so disable the extension.
+## Avoids lots of emote payload updates when connecting.
+extensions.remove('shirakumo-emotes')
 my_buffer = None
 my_client = None
 my_buffers = {}
