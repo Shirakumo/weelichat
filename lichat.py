@@ -64,6 +64,20 @@ def lichat_command(f):
         f(data, current_buffer, *args)
         return w.WEECHAT_RC_OK_EAT
 
+def ensure_buffer(name):
+    if u.channel not in my_buffers:
+        my_buffers[name] = w.buffer_new(f"lichat.{name}", "lichat_buffer_input_cb", name, "", "")
+    return my_buffers[name]
+
+def show(u, message=None, kind='text'):
+    buffer = ensure_buffer(u.channel)
+    if message == None:
+        message = u.text
+    if kind == 'text':
+        w.prnt(buffer, f"{u['from']}\t {message}")
+    else:
+        w.prnt(buffer, f"{w.prefix(kind)}{u['from']} {message}")
+
 def buffer_channelname(buf):
     pass # FIXME: return channel name for buffer.
 
@@ -161,25 +175,26 @@ def on_misc(client, u):
 def on_message(client, u):
     redir_id_to_buffer.pop(u['id'], None)
     w.prnt("", f"{w.prefix('info')}{redir_id_to_buffer}")
-    if u.channel not in my_buffers:
-        my_buffers[u.channel] = w.buffer_new(f"lichat.{u.channel}", "lichat_buffer_input_cb", u.channel, "", "")
-    w.prnt(my_buffers[u.channel], f"{u['from']}\t{u.text}")
+    show(u)
 
 def on_join(client, u):
-    if u.channel not in my_buffers:
-        my_buffers[u.channel] = w.buffer_new(f"lichat.{u.channel}", "lichat_buffer_input_cb", u.channel, "", "")
-    w.prnt(my_buffers[u.channel], f"{w.prefix('join')}{u['from']} has joined {u.channel}")
+    show(u, f"has joined {u.channel}", 'join')
 
 def on_leave(client, u):
-    if u.channel in my_buffers:
-        w.prnt(my_buffers[u.channel], f"{w.prefix('quit')}{u['from']} has left {u.channel}")
+    show(u, f"has left {u.channel}", 'quit')
+
+def on_pause(client, u):
+    if u.by == 0:
+        show(u, f"has disabled pause mode in {u.channel}", 'action')
+    else:
+        show(u, f"has enabled pause mode by {u.by} in {u.channel}", 'action')
 
 def on_data(client, u):
-    if u.channel in my_buffers and imgur_client_id != None and u['content-type'] in imgur_formats:
+    if imgur_client_id != None and u['content-type'] in imgur_formats:
         w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(u.__dict__))
-        w.prnt(my_buffers[u.channel], f"{u['from']}\t Uploading file...")
+        show(u, f"Sent file {u['filename']} (Uploading...)", 'action')
     else:
-        w.prnt(my_buffers[u.channel], f"{u['from']}\t Sent file {u['filename']}")
+        show(u, f"Sent file {u['filename']}", 'action')
 
 def upload_file(data):
     data = json.loads(data)
@@ -207,7 +222,7 @@ def process_upload(data, command, return_code, out, err):
     else:
         data = json.loads(out)
         # FIXME: Edit old message to show image URL.
-        w.prnt(my_buffers[data['channel']], f"{data['from']}\t Sent {u['payload']}")
+        show(data, f"Sent file {u['payload']}", 'action')
     return w.WEECHAT_RC_OK
 
 # class MyClient(Client):
