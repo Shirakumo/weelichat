@@ -20,7 +20,10 @@ try:
     from functools import wraps
     from inspect import signature
     import shlex
+    import json
+    import requests
     import socket
+    import base64
     from pylichat import Client
     from pylichat.update import *
     from pylichat.symbol import kw
@@ -32,6 +35,10 @@ my_buffer = None
 my_client = None
 my_buffers = {}
 redir_id_to_buffer = {}
+imgur_client_id = None
+imgur_formats = ['video/mp4' 'video/webm' 'video/x-matroska' 'video/quicktime'
+                 'video/x-flv' 'video/x-msvideo' 'video/x-ms-wmv' 'video/mpeg'
+                 'image/png' 'image/jpeg' 'image/gif' 'image/tiff' 'image/vnd.mozilla.apng']
 
 def lichat_buffer_or_ignore(f):
     """
@@ -167,6 +174,42 @@ def on_leave(client, u):
     if u.channel in my_buffers:
         w.prnt(my_buffers[u.channel], f"{w.prefix('quit')}{u['from']} has left {u.channel}")
 
+def on_data(client, u):
+    if u.channel in my_buffers and imgur_client_id != None and u['content-type'] in imgur_formats:
+        w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(u.__dict__))
+        w.prnt(my_buffers[u.channel], f"{u['from']}\t Uploading file...")
+    else:
+        w.prnt(my_buffers[u.channel], f"{u['from']}\t Sent file {u['filename']}")
+
+def upload_file(data):
+    data = json.loads(data)
+    try:
+        headers = {'Authorization': f'Client-ID {imgur_client_id}'}
+        data = {'type': 'file', 'title': data['filename']}
+        files = {}
+        if data['content_type'].startswith('image'):
+            files['image'] = (data['filename'], base64.b64decode(data['payload']), data['content-type'])
+        else:
+            files['video'] = (data['filename'], base64.b64decode(data['payload']), data['content-type'])
+        r = requests.post(url='https://api.imgur.com/3/image.json', data=data, files=files, headers=headers)
+        response = json.loads(r.text)
+        if response['success']:
+            data['payload'] = response['data']['link']
+            return json.dumps(data)
+        else:
+            return ''
+    except Exception:
+        return ''
+
+def process_upload(data, command, return_code, out, err):
+    if return_code == weechat.WEECHAT_HOOK_PROCESS_ERROR or out == '':
+        w.prnt("", "Failed to upload file.")
+    else:
+        data = json.loads(out)
+        # FIXME: Edit old message to show image URL.
+        w.prnt(my_buffers[data['channel']], f"{data['from']}\t Sent {u['payload']}")
+    return w.WEECHAT_RC_OK
+
 # class MyClient(Client):
 #     def connect_raw(self, host, port):
 #         pass
@@ -206,6 +249,7 @@ def lichat_cb(data, buffer, args_str):
         my_client.add_handler(Message, on_message)
         my_client.add_handler(Join, on_join)
         my_client.add_handler(Leave, on_leave)
+        my_client.add_handler(Data, on_data)
 
         if True:
             my_client.connect("chat.tymoon.eu", 1111)
