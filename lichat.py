@@ -147,24 +147,6 @@ def unquiet_command_cb(data, buf, target, channel=None):
 
 ## TODO: permissions, message, edit, users, channels, user-info, data
 
-def handle_input(client, line):
-    pass
-        # parts = line.split(' ', 1)
-        # command = parts[0]
-        # argument = parts[1]
-        # if command == '/join':
-        #     client.send(Join, channel=argument)
-        # elif command == '/leave':
-        #     if argument == '': argument = client.channel
-        #     client.send(Leave, channel=argument)
-        # elif command == '/create':
-        #     if argument == '':
-        #         client.send(Create)
-        #     else:
-        #         client.send(Create, channel=argument)
-        # else:
-        #     w.prnt('Unknown command {0}'.format(command))
-
 def on_misc(client, u):
     if isinstance(u, Failure):
         if isinstance(u, UpdateFailure):
@@ -225,33 +207,14 @@ def process_upload(data, command, return_code, out, err):
         show(data, f"Sent file {u['payload']}", 'action')
     return w.WEECHAT_RC_OK
 
-# class MyClient(Client):
-#     def connect_raw(self, host, port):
-#         pass
-
 def client_socket_cb(data, fd):
     for update in my_client.recv():
         w.prnt("", f"lichat\t{update.id} {type(update)}")
         my_client.handle(update)
     return w.WEECHAT_RC_OK
 
-# def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
-#     if status == w.WEECHAT_HOOK_CONNECT_OK:
-#         my_client.socket = socket.socket(fileno=sock)
-#         my_client.connect("chat.tymoon.eu", 1111)
-#         w.hook_fd(sock,
-#                   1,            # flag_read
-#                   0,            # flag_write
-#                   0,            # flag_exception
-#                   'client_socket_cb',
-#                   '')
-#     else:
-#         w.prnt("", f"{w.prefix('error')}\tlichat connect fail: {status} {error}")
-#     return w.WEECHAT_RC_OK
-
 def lichat_cb(data, buffer, args_str):
     args = shlex.split(args_str)
-    # w.prnt(buffer, f"/lichat\t{args}")
     if len(args) == 0:
         return w.WEECHAT_RC_ERROR
 
@@ -266,22 +229,13 @@ def lichat_cb(data, buffer, args_str):
         my_client.add_handler(Leave, on_leave)
         my_client.add_handler(Data, on_data)
 
-        if True:
-            my_client.connect("chat.tymoon.eu", 1111)
-            w.hook_fd(my_client.socket.fileno(),
-                      1,            # flag_read
-                      0,            # flag_write
-                      0,            # flag_exception
-                      'client_socket_cb',
-                      '')
-        # else:
-        #     w.hook_connect("",      # proxy
-        #                    "chat.tymoon.eu", 1111,
-        #                    0,       # ipv6
-        #                    0,       # retry
-        #                    "",      # local_hostname
-        #                    "connect_cb",
-        #                    "")
+        my_client.connect("chat.tymoon.eu", 1111)
+        w.hook_fd(my_client.socket.fileno(),
+                  1,            # flag_read
+                  0,            # flag_write
+                  0,            # flag_exception
+                  'client_socket_cb',
+                  '')
     else:
         w.prnt("", f"{w.prefix('error')}Error with command \"/lichat {args_str}\" (help on command: /help lichat)")
         return w.WEECHAT_RC_ERROR
@@ -294,11 +248,11 @@ if __name__ == '__main__' and import_ok:
         extensions.remove('shirakumo-emotes')
 
         w.hook_command('lichat',                   # command
-                             'lichat description', # description
-                             'args',               # args
-                             'args_description',   # args_description
-                             '',                   # completion
-                             'lichat_cb', '')
+                       'lichat description',       # description
+                       'args',                     # args
+                       'args_description',         # args_description
+                       '',                         # completion
+                       'lichat_cb', '')
         w.hook_command_run('/join', 'join_command_cb', '')
         w.hook_command_run('/part', 'part_command_cb', '')
         w.hook_command_run('/create', 'create_command_cb', '')
