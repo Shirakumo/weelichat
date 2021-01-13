@@ -18,10 +18,12 @@ except ImportError:
 
 try:
     from functools import wraps
+    from inspect import signature
     import shlex
     import socket
     from pylichat import Client
     from pylichat.update import *
+    from pylichat.symbol import kw
 except ImportError as message:
     print('Missing package(s) for %s: %s' % (SCRIPT_NAME, message))
     import_ok = False
@@ -47,6 +49,20 @@ def lichat_buffer_or_ignore(f):
         return f(data, current_buffer, *args, **kwargs)
     return wrapper
 
+def lichat_command(f):
+    @wraps(f)
+    def wrapper(data, current_buffer, args_str):
+        if not (current_buffer == my_buffer or current_buffer in my_buffers.values()):
+            return w.WEECHAT_RC_OK
+        args = shlex.split(args_str)[1:]
+        if len(signature(f).parameters)-2 < len(args):
+            return w.WEECHAT_RC_ERROR
+        f(data, current_buffer, *args)
+        return w.WEECHAT_RC_OK_EAT
+
+def buffer_channelname(buf):
+    pass # FIXME: return channel name for buffer.
+
 def lichat_buffer_input_cb(data, buffer, input_data):
     if buffer == my_buffer:
         w.prnt(buffer, f"{w.prefix('error')}This buffer is not a channel!")
@@ -54,23 +70,64 @@ def lichat_buffer_input_cb(data, buffer, input_data):
     redir_id_to_buffer[my_client.send(Message, channel=data, text=input_data)] = data
     return w.WEECHAT_RC_OK
 
-@lichat_buffer_or_ignore
-def join_command_cb(data, current_buffer, args_str):
-    args = shlex.split(args_str)
-    w.prnt("", f"{args}")
-    if len(args) == 2:
-        my_client.send(Join, channel=args[1])
-        return w.WEECHAT_RC_OK_EAT
-    return w.WEECHAT_RC_OK
+@lichat_command
+def join_command_cb(data, buf, channel):
+    my_client.send(Join, channel=channel)
 
-@lichat_buffer_or_ignore
-def part_command_cb(data, current_buffer, args_str):
-    args = shlex.split(args_str)
-    w.prnt("", f"{args}")
-    if len(args) == 2:
-        my_client.send(Leave, channel=args[1])
-        return w.WEECHAT_RC_OK_EAT
-    return w.WEECHAT_RC_OK
+@lichat_command
+def part_command_cb(data, buf, channel=None):
+    if channel == None:
+        channel = buffer_channelname(buf)
+    my_client.send(Leave, channel=channel)
+
+@lichat_command
+def create_command_cb(data, buf, channel=None):
+    my_client.send(Create, channel=channel)
+
+@lichat_command
+def pull_command_cb(data, buf, user, channel=None):
+    if channel == None:
+        channel = buffer_channelname(buf)
+    my_client.send(Pull, channel=channel, target=user)
+
+@lichat_command
+def kick_command_cb(data, buf, user, channel=None):
+    if channel == None:
+        channel = buffer_channelname(buf)
+    my_client.send(Kick, channel=channel, target=user)
+
+@lichat_command
+def register_command_cb(data, buf, password):
+    my_client.send(Register, password=password)
+
+@lichat_command
+def channel_info_command_cb(data, buf, key, value):
+    my_client.send(SetChannelInfo, key=kw(key), text=value)
+
+@lichat_command
+def topic_command_cb(data, buf, value=None):
+    if value == None:
+        w.prnt(buffer, my_client.channels[buffer_channelname(buf)][kw('topic')])
+    else:
+        my_client.send(SetChannelInfo, key=kw('topic'), text=value)
+
+@lichat_command
+def pause_command_cb(data, buf, pause="0"):
+    my_client.send(Pause, channel=buffer_channelname(buf), by=int(pause))
+
+@lichat_command
+def quiet_command_cb(data, buf, target, channel=None):
+    if channel == None:
+        channel = buffer_channelname(buf)
+    my_client.send(Quiet, channel=channel, target=target)
+
+@lichat_command
+def unquiet_command_cb(data, buf, target, channel=None):
+    if channel == None:
+        channel = buffer_channelname(buf)
+    my_client.send(Unquiet, channel=channel, target=target)
+
+## TODO: permissions, message, edit, users, channels, user-info, data
 
 def handle_input(client, line):
     pass
@@ -188,4 +245,13 @@ if __name__ == '__main__' and import_ok:
                              'lichat_cb', '')
         w.hook_command_run('/join', 'join_command_cb', '')
         w.hook_command_run('/part', 'part_command_cb', '')
+        w.hook_command_run('/create', 'create_command_cb', '')
+        w.hook_command_run('/invite', 'pull_command_cb', '')
+        w.hook_command_run('/kick', 'kick_command_cb', '')
+        w.hook_command_run('/register', 'register_command_cb', '')
+        w.hook_command_run('/setinfo', 'channel_info_command_cb', '')
+        w.hook_command_run('/topic', 'topic_command_cb', '')
+        w.hook_command_run('/pause', 'pause_command_cb', '')
+        w.hook_command_run('/quiet', 'quiet_command_cb', '')
+        w.hook_command_run('/unquiet', 'unquiet_command_cb', '')
         w.prnt("", "lichat.py\tis loaded ok")
