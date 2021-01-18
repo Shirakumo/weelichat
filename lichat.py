@@ -47,11 +47,11 @@ def weechat_buffer_to_representation(buffer):
     if server and channel:
         return servers[server].buffers[channel]
     
-def lichat_buffer_input_cb(data, buffer, input_data):
+def lichat_buffer_input_cb(buffer, w_buffer, input_data):
     buffer.send(Message, text=input_data)
     return w.WEECHAT_RC_OK
 
-def lichat_buffer_close_cb(data, buffer):
+def lichat_buffer_close_cb(buffer, w_buffer):
     buffer.send(Leave)
     buffer.delete()
     return w.WEECHAT_RC_OK
