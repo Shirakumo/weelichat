@@ -47,16 +47,19 @@ def weechat_buffer_to_representation(buffer):
     if server and channel:
         return servers[server].buffers[channel]
     
-def lichat_buffer_input_cb(buffer, w_buffer, input_data):
+def lichat_buffer_input_cb(_data, w_buffer, input_data):
+    buffer = weechat_buffer_to_representation(w_buffer)
     buffer.send(Message, text=input_data)
     return w.WEECHAT_RC_OK
 
-def lichat_buffer_close_cb(buffer, w_buffer):
+def lichat_buffer_close_cb(_data, w_buffer):
+    buffer = weechat_buffer_to_representation(w_buffer)
     buffer.send(Leave)
     buffer.delete()
     return w.WEECHAT_RC_OK
 
-def lichat_socket_cb(server, fd):
+def lichat_socket_cb(name, fd):
+    server = servers[name]
     for update in server.client.recv():
         server.client.handle(update)
     return w.WEECHAT_RC_OK
@@ -79,8 +82,8 @@ class Buffer:
         self.server = server
         self.channel = channel
         self.buffer = w.buffer_new(f"lichat.{server.name}.{name}",
-                                   'lichat_buffer_input_cb', self,
-                                   'lichat_buffer_close_cb', self)
+                                   'lichat_buffer_input_cb', '',
+                                   'lichat_buffer_close_cb', '')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_lichat_channel', channel)
         server.buffers[channel] = self
@@ -155,7 +158,7 @@ class Server:
         client.add_handler(Data, on_data)
         client.add_handler(SetChannelInfo, on_channel_info)
         client.connect()
-        w.hook_fd(client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', self)
+        w.hook_fd(client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', name)
         servers[name] = self
 
     def delete(self):
