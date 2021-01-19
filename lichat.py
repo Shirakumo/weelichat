@@ -436,6 +436,7 @@ def config_reload_cb(_data, file):
             instance.connect()
             for channel in w.config_string(cfg[server]['channels']).split('  '):
                 instance.send(Join, channel=channel)
+    return w.WEECHAT_RC_OK
 
 def config_section(file, section_name, options):
     def value_type(value):
