@@ -101,20 +101,20 @@ class Buffer:
         del self.server.buffers[self.channel]
 
     def send(self, type, **args):
-        if issubclass(type, ChannelUpdate) and type['channel'] == None:
-            args['channel'] = self.channel.name
+        if issubclass(type, ChannelUpdate) and 'channel' not in args:
+            args['channel'] = self.channel
         return self.server.send(type, **args)
 
     def send_cb(self, cb, type, **args):
-        if issubclass(type, ChannelUpdate) and type['channel'] == None:
-            args['channel'] = self.channel.name
+        if issubclass(type, ChannelUpdate) and 'channel' not in args:
+            args['channel'] = self.channel
         return self.server.send_cb(cb, type, **args)
 
     def show(self, update=None, text=None, kind='text'):
         if update == None:
             update = {'from': self.server.client.servername}
         if text == None:
-            text = update.get('text', f"Update of type {update.__type__.__name__}")
+            text = update.get('text', f"Update of type {type(update).__name__}")
         if kind == 'text':
             w.prnt(self.buffer, f"{update['from']}\t {text}")
         else:
@@ -134,6 +134,8 @@ class Server:
         client = Client(username, password)
         self.name = name
         self.client = client
+        self.host = host
+        self.port = port
 
         def on_misc(client, update):
             if isinstance(update, Failure):
@@ -175,12 +177,12 @@ class Server:
 
     def connect(self):
         if self.hook == None:
-            client.connect()
-            self.hook = w.hook_fd(client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', name)
+            self.client.connect(self.host, self.port)
+            self.hook = w.hook_fd(self.client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', self.name)
 
     def disconnect(self):
         if self.hook != None:
-            client.disconnect()
+            self.client.disconnect()
             w.unhook(self.hook)
             self.hook = None
 
@@ -207,33 +209,37 @@ class Server:
             name = buffer
             buffer = self.buffers.get(name, None)
             if buffer == None:
-                buffer = Buffer(self, buffer)
+                buffer = Buffer(self, name)
         buffer.show(update, text=text, kind=kind)
 
-def raw_command(f, name, description=''):
-    @wraps(f)
-    def wrapper(data, w_buffer, args_str):
-        args = shlex.split(args_str)
-        if len(signature(f).parameters)-2 < len(args):
-            return w.WEECHAT_RC_ERROR
-        f(w_buffer, *args)
-        return w.WEECHAT_RC_OK_EAT
-    register_command(name, wrapper, description)
-    return wrapper
+def raw_command(name, description=''):
+    def nested(f):
+        @wraps(f)
+        def wrapper(data, w_buffer, args_str):
+            args = shlex.split(args_str)
+            if len(signature(f).parameters)-2 < len(args):
+                return w.WEECHAT_RC_ERROR
+            f(w_buffer, *args)
+            return w.WEECHAT_RC_OK_EAT
+        register_command(name, wrapper, description)
+        return wrapper
+    return nested
 
-def lichat_command(f, name, description=''):
-    @wraps(f)
-    def wrapper(data, w_buffer, args_str):
-        buffer = weechat_buffer_to_representation(w_buffer)
-        if buffer == None:
-            return w.WEECHAT_RC_OK
-        args = shlex.split(args_str)
-        if len(signature(f).parameters)-2 < len(args):
-            return w.WEECHAT_RC_ERROR
-        f(buffer, *args)
-        return w.WEECHAT_RC_OK_EAT
-    register_command(name, wrapper, description)
-    return wrapper
+def lichat_command(name, description=''):
+    def nested(f):
+        @wraps(f)
+        def wrapper(data, w_buffer, args_str):
+            buffer = weechat_buffer_to_representation(w_buffer)
+            if buffer == None:
+                return w.WEECHAT_RC_OK
+            args = shlex.split(args_str)
+            if len(signature(f).parameters)-2 < len(args):
+                return w.WEECHAT_RC_ERROR
+            f(buffer, *args)
+            return w.WEECHAT_RC_OK_EAT
+        register_command(name, wrapper, description)
+        return wrapper
+    return nested
 
 @raw_command('connect')
 def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, password=None):
@@ -319,7 +325,7 @@ def unquiet_command_cb(buffer, target, channel=None):
 
 @lichat_command('message')
 def message_command_cb(buffer, channel, *args):
-    buffer.send(Message, channel=channel, ' '.join(args))
+    buffer.send(Message, channel=channel, message=' '.join(args))
 
 @lichat_command('users')
 def users_command_cb(buffer, channel=None):
@@ -405,9 +411,8 @@ def servers_options():
     cfg = config['server']
     for name in cfg:
         parts = name.split('.', 1)
-        if parts[0] not in found:
-            found[parts[0]] = {}
-        found[parts[0]][parts[1]] = cfg[name]
+        if len(parts) > 1:
+            found.setdefault(parts[0], {})[parts[1]] = cfg[name]
     return found
 
 def config_create_option_cb(section_name, file, section, option, value):
@@ -423,45 +428,48 @@ def config_delete_option_cb(section_name, file, section, option):
 
 def config_reload_cb(_data, file):
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
-    cfg = servers_options()
-    for server in cfg:
+    for server, sconf in servers_options().items():
         if server not in servers:
             Server(server,
-                   w.config_string(cfg[server]['username']),
-                   w.config_string(cfg[server]['password']),
-                   w.config_string(cfg[server]['host']),
-                   w.config_integer(cfg[server]['port']))
+                   w.config_string(sconf['username']),
+                   w.config_string(sconf['password']),
+                   w.config_string(sconf['host']),
+                   w.config_integer(sconf['port']))
         instance = servers[server]
-        if cfg[server]['connect'] and not instance.is_connected():
+        if sconf.get('connect', False) and not instance.is_connected():
             instance.connect()
-            for channel in w.config_string(cfg[server]['channels']).split('  '):
+            for channel in w.config_string(sconf['channels']).split('  '):
                 instance.send(Join, channel=channel)
     return w.WEECHAT_RC_OK
 
 def config_section(file, section_name, options):
     def value_type(value):
-        if type(value) == str:
-            return 'string'
-        if type(value) == int:
-            return 'integer'
-        if value == True or value == False:
+        if isinstance(value, bool): # NB: bool is a subclass of int
             return 'boolean'
+        if isinstance(value, str):
+            return 'string'
+        if isinstance(value, int):
+            return 'integer'
 
     section = None
     if section_name in config:
         section = config[section_name]['__section__']
     else:
-        section = w.config_new_section(config, section_name, 1, 1, '', '', '', '', '', '', 'config_create_option_cb', section_name, 'config_delete_option_cb', section_name)
+        section = w.config_new_section(file, section_name, 1, 1, '', '', '', '', '', '', 'config_create_option_cb', section_name, 'config_delete_option_cb', section_name)
         config[section_name] = {'__section__': section}
     
     for option in options:
         name = option['name']
-        type = option.get('type', value_type(option['default']))
-        description = option.get('description', '('+type+')')
+        optype = option.get('optype', value_type(option['default']))
+        description = option.get('description', f'({optype})')
         min = option.get('min', 0)
         max = option.get('max', 0)
-        default = option['default']
-        config[section_name][name] = w.config_new_option(file, section, name, type, description, '', min, max, default, default, 0, '', '', '', '', '', '')
+        default = str(option['default'])
+        config[section_name][name] = w.config_new_option(file, section, name,
+                                                         optype, description,
+                                                         '', min, max,
+                                                         default, default, 0,
+                                                         '', '', '', '', '', '')
     return section
 
 if __name__ == '__main__' and import_ok:
@@ -482,7 +490,7 @@ if __name__ == '__main__' and import_ok:
             {'name': 'connect', 'default': True}
         ])
         config_section(config_file, 'server', [
-            {'name': 'tynet.host', 'default': 'chat.tymoon.eu'}
+            {'name': 'tynet.host', 'default': 'chat.tymoon.eu'},
             {'name': 'tynet.port', 'default': 1111, 'min': 1, 'max': 65535},
             {'name': 'tynet.username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
             {'name': 'tynet.password', 'default': ''},
