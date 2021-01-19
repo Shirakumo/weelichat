@@ -41,11 +41,15 @@ servers = {}
 def register_command(name, func, description=''):
     commands[name] = {'func': func, 'description': description}
 
+def find_buffer(server, channel):
+    server = servers.get(server, None)
+    if server != None:
+        return server.buffers.get(channel, None)
+
 def weechat_buffer_to_representation(buffer):
     server = w.buffer_get_string(buffer, 'localvar_lichat_server')
     channel = w.buffer_get_string(buffer, 'localvar_lichat_channel')
-    if server and channel:
-        return servers[server].buffers[channel]
+    return find_buffer(server, channel)
     
 def lichat_buffer_input_cb(_data, w_buffer, input_data):
     buffer = weechat_buffer_to_representation(w_buffer)
@@ -104,7 +108,7 @@ class Buffer:
             args['channel'] = self.channel.name
         return self.server.send_cb(cb, type, **args)
 
-    def show(self, update=None, text=none, kind='text'):
+    def show(self, update=None, text=None, kind='text'):
         if update == None:
             update = {'from': self.server.client.servername}
         if text == None:
@@ -113,6 +117,10 @@ class Buffer:
             w.prnt(self.buffer, f"{update['from']}\t {text}")
         else:
             w.prnt(self.buffer, f"{w.prefix(kind)}{update['from']} {text}")
+
+    def edit(self, update, text=None):
+        ## FIXME: Do edit magic based on update id here
+        self.show(update, text)
 
 class Server:
     name = None
@@ -313,13 +321,13 @@ def upload_file(data):
     data = json.loads(data)
     try:
         headers = {'Authorization': f'Client-ID {imgur_client_id}'}
-        data = {'type': 'file', 'title': data['filename']}
+        post = {'type': 'file', 'title': data['filename']}
         files = {}
         if data['content_type'].startswith('image'):
             files['image'] = (data['filename'], base64.b64decode(data['payload']), data['content-type'])
         else:
             files['video'] = (data['filename'], base64.b64decode(data['payload']), data['content-type'])
-        r = requests.post(url='https://api.imgur.com/3/image.json', data=data, files=files, headers=headers)
+        r = requests.post(url='https://api.imgur.com/3/image.json', data=post, files=files, headers=headers)
         response = json.loads(r.text)
         if response['success']:
             data['payload'] = response['data']['link']
@@ -334,8 +342,9 @@ def process_upload(data, command, return_code, out, err):
         w.prnt("", "Failed to upload file.")
     else:
         data = json.loads(out)
-        # FIXME: Edit old message to show image URL.
-        show(data, f"Sent file {u['payload']}", 'action')
+        buffer = find_buffer(data['server'], data['channel'])
+        if buffer != None:
+            buffer.edit(data, text=f"Sent file {u['payload']}")
     return w.WEECHAT_RC_OK
 
 def lichat_cb(data, w_buffer, args_str):
