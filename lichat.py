@@ -35,6 +35,8 @@ imgur_client_id = None
 imgur_formats = ['video/mp4' 'video/webm' 'video/x-matroska' 'video/quicktime'
                  'video/x-flv' 'video/x-msvideo' 'video/x-ms-wmv' 'video/mpeg'
                  'image/png' 'image/jpeg' 'image/gif' 'image/tiff' 'image/vnd.mozilla.apng']
+config_file = None
+config = {}
 commands = {}
 servers = {}
 
@@ -126,6 +128,7 @@ class Server:
     name = None
     client = None
     buffers = {}
+    hook = None
 
     def __init__(self, name=None, username=None, password=None, host='chat.tymoon.eu', port=1111):
         client = Client(username, password)
@@ -165,9 +168,21 @@ class Server:
         client.add_handler(Pause, on_pause)
         client.add_handler(Data, on_data)
         client.add_handler(SetChannelInfo, on_channel_info)
-        client.connect()
-        w.hook_fd(client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', name)
         servers[name] = self
+
+    def is_connected(self):
+        return self.hook != None
+
+    def connect(self):
+        if self.hook == None:
+            client.connect()
+            self.hook = w.hook_fd(client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', name)
+
+    def disconnect(self):
+        if self.hook != None:
+            client.disconnect()
+            w.unhook(self.hook)
+            self.hook = None
 
     def delete(self):
         self.client.disconnect()
@@ -221,9 +236,22 @@ def lichat_command(f, name, description=''):
     return wrapper
 
 @raw_command('connect')
-def connect_command_cb(w_buffer, hostname='chat.tymoon.eu', port='1111', username=None, password=None, name=None):
-    if name == None: name = hostname
-    Server(name=name, username=username, password=password, host=host, port=port)
+def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, password=None):
+    if name not in servers:
+        if hostname == None: hostname = cfg('server_default', 'host')
+        if port == None: port = cfg('server_default', 'port', int)
+        if username == None: username = cfg('server_default', 'username')
+        if password == None: password = cfg('server_default', 'password')
+        Server(name=name, username=username, password=password, host=host, port=port)
+        config_section(config_file, 'server', [
+            {'name': 'host', 'default': hostname},
+            {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
+            {'name': 'username', 'default': username},
+            {'name': 'password', 'default': password},
+            {'name': 'channels', 'default': ''},
+            {'name': 'connect', 'default': True}
+        ])
+    servers[name].connect()
 
 @raw_command('help')
 def help_command_cb(w_buffer, topic=None):
@@ -358,10 +386,110 @@ def lichat_cb(data, w_buffer, args_str):
         return w.WEECHAT_RC_ERROR
     return command(data, w_buffer, shlex.join(args))
 
+def cfg(section, option, type=str):
+    cfg = config[section][option]
+    if type == str: return w.config_string(cfg)
+    elif type == bool: return w.config_boolean(cfg)
+    elif type == int: return w.config_integer(cfg)
+
+def server_options(server):
+    found = {}
+    cfg = config['server']
+    for name in cfg:
+        if name.starts_with(server+'.'):
+            found[name[len(server)+1:]] = cfg[name]
+    return found
+
+def servers_options():
+    found = {}
+    cfg = config['server']
+    for name in cfg:
+        parts = name.split('.', 1)
+        if parts[0] not in found:
+            found[parts[0]] = {}
+        found[parts[0]][parts[1]] = cfg[name]
+    return found
+
+def config_create_option_cb(section_name, file, section, option, value):
+    config[section_name][option] = w.config_search_option(file, section, option)
+    return w.WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE
+
+def config_delete_option_cb(section_name, file, section, option):
+    cfg = config[section_name]
+    for key in cfg:
+        if cfg[key] == option:
+            del cfg[key]
+    return w.WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED
+
+def config_reload_cb(_data, file):
+    imgur_client_id = cfg('behaviour', 'imgur_client_id')
+    cfg = servers_options()
+    for server in cfg:
+        if server not in servers:
+            Server(server,
+                   w.config_string(cfg[server]['username']),
+                   w.config_string(cfg[server]['password']),
+                   w.config_string(cfg[server]['host']),
+                   w.config_integer(cfg[server]['port']))
+        instance = servers[server]
+        if cfg[server]['connect'] and not instance.is_connected():
+            instance.connect()
+            for channel in w.config_string(cfg[server]['channels']).split('  '):
+                instance.send(Join, channel=channel)
+
+def config_section(file, section_name, options):
+    def value_type(value):
+        if type(value) == str:
+            return 'string'
+        if type(value) == int:
+            return 'integer'
+        if value == True or value == False:
+            return 'boolean'
+
+    section = None
+    if section_name in config:
+        section = config[section_name]['__section__']
+    else:
+        section = w.config_new_section(config, section_name, 1, 1, '', '', '', '', '', '', 'config_create_option_cb', section_name, 'config_delete_option_cb', section_name)
+        config[section_name] = {'__section__': section}
+    
+    for option in options:
+        name = option['name']
+        type = option.get('type', value_type(option['default']))
+        description = option.get('description', '('+type+')')
+        min = option.get('min', 0)
+        max = option.get('max', 0)
+        default = option['default']
+        config[section_name][name] = w.config_new_option(file, section, name, type, description, '', min, max, default, default, 0, '', '', '', '', '', '')
+    return section
+
 if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
                         SCRIPT_LICENSE, SCRIPT_DESC, '', ''):
         extensions.remove('shirakumo-emotes')
+
+        config_file = w.config_new('lichat', 'config_reload_cb', '')
+        config_section(config_file, 'behaviour', [
+            {'name': 'imgur_client_id', 'default': ''}
+        ])
+        config_section(config_file, 'server_default', [
+            {'name': 'host', 'default': ''},
+            {'name': 'port', 'default': 1111, 'min': 1, 'max': 65535},
+            {'name': 'username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
+            {'name': 'password', 'default': ''},
+            {'name': 'channels', 'default': ''},
+            {'name': 'connect', 'default': True}
+        ])
+        config_section(config_file, 'server', [
+            {'name': 'tynet.host', 'default': 'chat.tymoon.eu'}
+            {'name': 'tynet.port', 'default': 1111, 'min': 1, 'max': 65535},
+            {'name': 'tynet.username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
+            {'name': 'tynet.password', 'default': ''},
+            {'name': 'tynet.channels', 'default': 'lichatters'},
+            {'name': 'tynet.connect', 'default': False}
+        ])
+        config_reload_cb('', config_file)
+        
         w.hook_command('lichat',                   # command
                        'lichat description',       # description
                        'args',                     # args
@@ -376,8 +504,5 @@ if __name__ == '__main__' and import_ok:
         w.hook_command_run('/topic', 'topic_command_cb', '')
 
         w.bar_item_new('input_prompt', '(extra)input_prompt_cb', '')
-
-        ## TODO: restore saved servers from config
-        ## TODO: auto-join saved channels from config
         
         w.prnt("", "lichat.py\tis loaded ok")
