@@ -116,9 +116,9 @@ class Buffer:
         if text == None:
             text = update.get('text', f"Update of type {type(update).__name__}")
         if kind == 'text':
-            w.prnt(self.buffer, f"{update['from']}\t {text}")
+            w.prnt(self.buffer, f"{update['from']}\t{text}")
         else:
-            w.prnt(self.buffer, f"{w.prefix(kind)}{update['from']} {text}")
+            w.prnt(self.buffer, f"{w.prefix(kind)}{update['from']}: {text}")
 
     def edit(self, update, text=None):
         ## FIXME: Do edit magic based on update id here
@@ -139,7 +139,7 @@ class Server:
 
         def on_misc(client, update):
             if isinstance(update, Failure):
-                self.show(update)
+                self.show(update, kind='error')
 
         def display(client, update):
             self.show(update)
@@ -200,7 +200,8 @@ class Server:
     def show(self, update, text=None, kind='text', buffer=None):
         if buffer == None and isinstance(update, UpdateFailure):
             origin = self.client.origin(update)
-            if origin != None: buffer = origin.get('channel', None)
+            if origin != None and not isinstance(origin, Leave):
+                buffer = origin.get('channel', None)
         if buffer == None:
             buffer = update.get('channel', None)
         if buffer == None:
