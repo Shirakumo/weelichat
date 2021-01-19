@@ -421,12 +421,13 @@ def config_create_option_cb(section_name, file, section, option, value):
 
 def config_delete_option_cb(section_name, file, section, option):
     cfg = config[section_name]
-    for key in cfg:
+    for key in list(cfg):
         if cfg[key] == option:
             del cfg[key]
     return w.WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED
 
 def config_reload_cb(_data, file):
+    w.config_reload(file)
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
     for server, sconf in servers_options().items():
         if server not in servers:
@@ -436,7 +437,7 @@ def config_reload_cb(_data, file):
                    w.config_string(sconf['host']),
                    w.config_integer(sconf['port']))
         instance = servers[server]
-        if sconf.get('connect', False) and not instance.is_connected():
+        if w.config_boolean(sconf['connect']) and not instance.is_connected():
             instance.connect()
             for channel in w.config_string(sconf['channels']).split('  '):
                 instance.send(Join, channel=channel)
