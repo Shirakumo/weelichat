@@ -40,8 +40,8 @@ config = {}
 commands = {}
 servers = {}
 
-def register_command(name, func, description=''):
-    commands[name] = {'func': func, 'description': description}
+def register_command(name, func, description='', cmdtype='lichat'):
+    commands[name] = {'func': func, 'description': description, 'cmdtype': cmdtype}
 
 def find_buffer(server, channel):
     server = servers.get(server, None)
@@ -213,16 +213,34 @@ class Server:
                 buffer = Buffer(self, name)
         buffer.show(update, text=text, kind=kind)
 
+def check_signature(f, args, command=None):
+    sig = signature(f)
+    try:
+        sig.bind(*args)
+        return True
+    except TypeError:
+        if command:
+            # try to figure out if it was too many, or too few
+            try:
+                # if this succeeds, there were not enough arguments
+                sig.bind_partial(*args)
+                w.prnt("", f"{w.prefix('error')}lichat: Too few arguments for command \"{command}\"")
+            except TypeError:
+                w.prnt("", f"{w.prefix('error')}lichat: Too many arguments for command \"{command}\"")
+        return False
+
 def raw_command(name, description=''):
     def nested(f):
         @wraps(f)
         def wrapper(data, w_buffer, args_str):
             args = shlex.split(args_str)
-            if len(signature(f).parameters)-2 < len(args):
+            args.pop(0)
+            if check_signature(f, [w_buffer, *args], command=name):
+                f(w_buffer, *args)
+            else:
                 return w.WEECHAT_RC_ERROR
-            f(w_buffer, *args)
-            return w.WEECHAT_RC_OK_EAT
-        register_command(name, wrapper, description)
+            return w.WEECHAT_RC_OK
+        register_command(name, wrapper, description, cmdtype='raw')
         return wrapper
     return nested
 
@@ -231,14 +249,14 @@ def lichat_command(name, description=''):
         @wraps(f)
         def wrapper(data, w_buffer, args_str):
             buffer = weechat_buffer_to_representation(w_buffer)
-            if buffer == None:
+            if buffer is None:
                 return w.WEECHAT_RC_OK
             args = shlex.split(args_str)
-            if len(signature(f).parameters)-2 < len(args):
-                return w.WEECHAT_RC_ERROR
-            f(buffer, *args)
+            args.pop(0)
+            if check_signature(f, [buffer, *args], command=name):
+                f(buffer, *args)
             return w.WEECHAT_RC_OK_EAT
-        register_command(name, wrapper, description)
+        register_command(name, wrapper, description, cmdtype='lichat')
         return wrapper
     return nested
 
@@ -387,11 +405,17 @@ def lichat_cb(data, w_buffer, args_str):
     if len(args) == 0:
         return w.WEECHAT_RC_ERROR
 
-    command = commands.get(args.pop(), None)
+    name = args[0]
+    command = commands.get(name, None)
     if command == None:
         w.prnt(w_buffer, f"{w.prefix('error')}Error with command \"/lichat {args_str}\" (help on command: /help lichat)")
         return w.WEECHAT_RC_ERROR
-    return command(data, w_buffer, shlex.join(args))
+
+    if command['cmdtype'] == 'lichat' and weechat_buffer_to_representation(w_buffer) is None:
+        w.prnt(w_buffer, f"{w.prefix('error')}lichat: command \"lichat {name}\" must be executed on lichat buffer (server, channel or private)")
+        return w.WEECHAT_RC_ERROR
+
+    return command['func'](data, w_buffer, shlex.join(args))
 
 def cfg(section, option, type=str):
     cfg = config[section][option]
