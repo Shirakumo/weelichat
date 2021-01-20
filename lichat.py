@@ -407,6 +407,22 @@ def quiet_command_cb(buffer, target, channel=None):
 def unquiet_command_cb(buffer, target, channel=None):
     buffer.send(Unquiet, channel=channel, target=target)
 
+@lichat_command('ban', 'Bans the given user from the server by username.')
+def ban_command_cb(buffer, target):
+    buffer.send(Ban, target=target)
+
+@lichat_command('unban', 'Unbans the given username from the server.')
+def unban_command_cb(buffer, target):
+    buffer.send(Unban, target=target)
+
+@lichat_command('ip-ban', 'Bans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
+def ip_ban_command_cb(buffer, ip, mask='::'):
+    buffer.send(IpBan, ip=ip, mask=mask)
+
+@lichat_command('ip-unban', 'Unbans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
+def ip_unban_command_cb(buffer, ip, mask='::'):
+    buffer.send(IpUnban, ip=ip, mask=mask)
+
 @lichat_command('message', 'Send a message to the given channel.')
 def message_command_cb(buffer, channel, *args):
     buffer.send(Message, channel=channel, message=' '.join(args))
@@ -487,6 +503,7 @@ def deny_command_cb(buffer, update, target=None, channel=None):
         buffer.send_cb(callback, Permissions, channel=channel)
 
 ## TODO: edit, data
+## TODO: display confirmation when command for quiet/unquiet/pause/grant/deny/etc. has gone through.
 
 def upload_file(data):
     data = json.loads(data)
