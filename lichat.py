@@ -27,6 +27,7 @@ try:
     from pylichat import Client
     from pylichat.update import *
     from pylichat.symbol import kw
+    import pylichat.wire
 except ImportError as message:
     print('Missing package(s) for %s: %s' % (SCRIPT_NAME, message))
     import_ok = False
@@ -41,7 +42,7 @@ commands = {}
 servers = {}
 
 def register_command(name, func, description='', cmdtype='lichat'):
-    commands[name] = {'func': func, 'description': description, 'cmdtype': cmdtype}
+    commands[name] = {'name': name, 'func': func, 'description': description, 'cmdtype': cmdtype}
 
 def find_buffer(server, channel):
     server = servers.get(server, None)
@@ -260,7 +261,7 @@ def lichat_command(name, description=''):
         return wrapper
     return nested
 
-@raw_command('connect')
+@raw_command('connect', 'Connect to an existing server configuration or create a new one.')
 def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, password=None):
     if name not in servers:
         if hostname == None: hostname = cfg('server_default', 'host')
@@ -278,87 +279,103 @@ def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, 
         ])
     servers[name].connect()
 
-@raw_command('help')
+@raw_command('help', 'Display help information about lichat commands.')
 def help_command_cb(w_buffer, topic=None):
     if topic == None:
         for name in commands:
             command = commands[name]
-            w.prnt(w_buffer, f"{name}\t{command.description}")
+            w.prnt(w_buffer, f"{name}\t{command['description']}")
     else:
         command = commands.get(topic, None)
         if command == None:
             w.prnt(w_buffer, f"{w.prefix('error')} No such command {command}")
         else:
-            w.prnt(w_buffer, f"{name}: {command.description}")
+            sig = signature(command['func'])
+            parameters = sig.parameters.copy()
+            parameters.popitem(last=False)
+            sig = sig.replace(parameters=parameters.values())
+            w.prnt(w_buffer, f"/lichat {command['name']} {sig}")
+            w.prnt(w_buffer, f"{command['description']}")
 
-@lichat_command('join')
+@lichat_command('join', 'Join an existing channel.')
 def join_command_cb(buffer, channel):
     buffer.send(Join, channel=channel)
 
-@lichat_command('leave')
+@lichat_command('leave', 'Leave a channel you\'re in. Defaults to the current channel.')
 def leave_command_cb(buffer, channel=None):
     buffer.send(Leave, channel=channel)
 
-@lichat_command('create')
+@lichat_command('create', 'Create a new channel. If no name is given, an anonymous channel is created.')
 def create_command_cb(buffer, channel=''):
     buffer.send(Create, channel=channel)
 
-@lichat_command('pull')
+@lichat_command('pull', 'Pull another user into a channel. If no channel name is given, defaults to the current channel.')
 def pull_command_cb(buffer, user, channel=None):
     buffer.send(Pull, channel=channel, target=user)
 
-@lichat_command('kick')
+@lichat_command('kick', 'Kicks another user from a channel. If no channel name is given, defaults to the current channel.')
 def kick_command_cb(buffer, user, channel=None):
     buffer.send(Kick, channel=channel, target=user)
 
-@lichat_command('register')
+@lichat_command('register', 'Register your account with a password. If successful, will save the password to config.')
 def register_command_cb(buffer, password):
-    buffer.send(Register, password=password)
+    def reg_cb(_client, _prev, update):
+        if isinstance(update, Register):
+            w.config_option_set(config['server'][buffer.server.name+'.password'], password, 0)
+    buffer.send_cb(reg_cb, Register, password=password)
 
-@lichat_command('set-channel-info')
-def set_channel_info_command_cb(buffer, key, value):
-    buffer.send(SetChannelInfo, key=kw(key), text=value)
+@lichat_command('set-channel-info', """Set channel information. If no channel name is given, defaults to the current channel.
+The key must be a lichat symbol. By default the following symbols are recognised:
+  :news
+  :topic
+  :rules
+  :contact
+However, a server may support additional symbols.""")
+def set_channel_info_command_cb(buffer, key, value, channel=None):
+    buffer.send(SetChannelInfo, channel=channel, key=wire.from_string(key), text=value)
 
-@lichat_command('channel-info')
-def channel_info_command_cb(buffer, key=True):
-    buffer.send(ChannelInfo, key=kw(key))
+@lichat_command('channel-info', 'Retrieve channel information. If no channel name is given, defaults to the current channel. If no key is given, all channel info is requested.')
+def channel_info_command_cb(buffer, key=True, channel=None):
+    if key != True:
+        key = wire.from_string(key)
+    buffer.send(ChannelInfo, channel=channel, key=key)
 
-@lichat_command('topic')
+@lichat_command('topic', 'View or set the topic of the current channel.')
 def topic_command_cb(buffer, value=None):
     if value == None:
         buffer.show(text=buffer.info(kw('topic')))
     else:
         buffer.send(SetChannelInfo, key=kw('topic'), text=value)
 
-@lichat_command('pause')
-def pause_command_cb(buffer, pause="0"):
-    buffer.send(Pause, by=int(pause))
+@lichat_command('pause', 'Set the pause mode of the channel. If no channel name is given, defaults to the current channel. If no pause time is given, pause-mode is ended.')
+def pause_command_cb(buffer, pause="0", channel=None):
+    buffer.send(Pause, channel=channel, by=int(pause))
 
-@lichat_command('quiet')
+@lichat_command('quiet', 'Quiets the given user. If no channel name is given, defaults to the current channel.')
 def quiet_command_cb(buffer, target, channel=None):
     buffer.send(Quiet, channel=channel, target=target)
 
-@lichat_command('unquiet')
+@lichat_command('unquiet', 'Unquiets the given user. If no channel name is given, defaults to the current channel.')
 def unquiet_command_cb(buffer, target, channel=None):
     buffer.send(Unquiet, channel=channel, target=target)
 
-@lichat_command('message')
+@lichat_command('message', 'Send a message to the given channel.')
 def message_command_cb(buffer, channel, *args):
     buffer.send(Message, channel=channel, message=' '.join(args))
 
-@lichat_command('users')
+@lichat_command('users', 'List the users of the given channel. If no channel name is given, defaults to the current channel.')
 def users_command_cb(buffer, channel=None):
     def callback(_client, _prev, users):
         buffer.show(text=f"Currently in channel: {' '.join(users.users)}")
     buffer.send_cb(callback, Users, channel=channel)
 
-@lichat_command('channels')
+@lichat_command('channels', 'List the channels of the current server.')
 def channels_command_cb(buffer):
     def callback(_client, _prev, channels):
         buffer.show(text=f"Channels: {' '.join(channels.channels)}")
     buffer.send_cb(callback, Channels)
 
-@lichat_command('user-info')
+@lichat_command('user-info', 'Request information on the given user.')
 def user_info_command_cb(buffer, target):
     def callback(_client, _prev, info):
         registered = 'registered'
