@@ -86,14 +86,18 @@ class Buffer:
 
     def __init__(self, server, channel, name=None):
         if name == None: name = channel
+        self.name = name
         self.server = server
         self.channel = channel
-        self.buffer = w.buffer_new(f"lichat.{server.name}.{name}",
+        self.buffer = w.buffer_new(self.w_name(),
                                    'lichat_buffer_input_cb', '',
                                    'lichat_buffer_close_cb', '')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_lichat_channel', channel)
         server.buffers[channel] = self
+
+    def w_name(self):
+        return f"lichat.{self.server.name}.{self.name}"
 
     def info(self, key):
         return self.server.client.channels[self.channel][key]
@@ -104,7 +108,7 @@ class Buffer:
     def complete_channel(self, args):
         if args.get('channel', None) == None:
             args['channel'] = self.channel
-        elif args['channel'].starts_with('/'):
+        elif args['channel'].startswith('/'):
             if self.server.is_supported('shirakumo-channel-trees'):
                 args['channel'] = self.channel + args['channel']
 
@@ -474,7 +478,7 @@ def server_options(server):
     found = {}
     cfg = config['server']
     for name in cfg:
-        if name.starts_with(server+'.'):
+        if name.startswith(server+'.'):
             found[name[len(server)+1:]] = cfg[name]
     return found
 
