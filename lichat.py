@@ -331,6 +331,14 @@ def connect_command_cb(w_buffer, name=None, hostname=None, port=None, username=N
     else:
         servers[name].connect()
 
+
+@lichat_command('disconnect', 'Disconnect from a lichat server. If no name is given, the server of the current channel is disconnected.')
+def disconnect_command_cb(buffer, server=None):
+    server = buffer.server
+    if server != None:
+        server = servers[server]
+    server.disconnect()
+
 @raw_command('help', 'Display help information about lichat commands.')
 def help_command_cb(w_buffer, topic=None):
     if topic == None:
@@ -677,6 +685,7 @@ if __name__ == '__main__' and import_ok:
                        'args_description',         # args_description
                        '',                         # completion
                        'lichat_cb', '')
+        w.hook_command_run('/disconnect', 'disconnect_command_cb', '')
         w.hook_command_run('/join', 'join_command_cb', '')
         w.hook_command_run('/part', 'leave_command_cb', '')
         w.hook_command_run('/invite', 'pull_command_cb', '')
