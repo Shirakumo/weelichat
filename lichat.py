@@ -262,17 +262,23 @@ def lichat_command(name, description=''):
         return wrapper
     return nested
 
-@raw_command('connect', 'Connect to an existing server configuration or create a new one.')
-def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, password=None, ssl=None):
-    if name not in servers:
-        if hostname == None: hostname = cfg('server_default', 'host')
+@raw_command('connect', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
+def connect_command_cb(w_buffer, name=None, hostname=None, port=None, username=None, password=None, ssl=None):
+    if name == None:
+        for server in servers:
+            if not server.is_connected():
+                servers[server].connect()
+    elif hostname != None:
+        if name in servers:
+            w.prnt(w_buffer, f"f{w.prefix('error')} A server of that name already exists.")
+            return
         if port == None: port = cfg('server_default', 'port', int)
         if username == None: username = cfg('server_default', 'username')
         if password == None: password = cfg('server_default', 'password')
         if ssl == None: ssl = cfg('server_default', 'ssl', bool)
         if ssl == 'on': ssl = True
         if ssl == 'off': ssl = False
-        Server(name=name, username=username, password=password, host=host, port=port, ssl=ssl)
+        Server(name=name, username=username, password=password, host=host, port=port, ssl=ssl).connect()
         config_section(config_file, 'server', [
             {'name': 'host', 'default': hostname},
             {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
@@ -282,7 +288,10 @@ def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, 
             {'name': 'connect', 'default': True}
             {'name': 'ssl', 'default': ssl}
         ])
-    servers[name].connect()
+    elif name not in servers:
+        w.prnt(w_buffer, f"f{w.prefix('error')} No such server {name}")
+    else:
+        servers[name].connect()
 
 @raw_command('help', 'Display help information about lichat commands.')
 def help_command_cb(w_buffer, topic=None):
