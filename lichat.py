@@ -122,6 +122,9 @@ class Buffer:
             self.complete_channel(args)
         return self.server.send_cb(cb, type, **args)
 
+    def display(self):
+        w.command(self.buffer, f"/buffer {self.w_name()}")
+
     def show(self, update=None, text=None, kind='text'):
         if update == None:
             update = {'from': self.server.client.servername}
@@ -333,8 +336,12 @@ def help_command_cb(w_buffer, topic=None):
             w.prnt(w_buffer, f"{command['description']}")
 
 @lichat_command('join', 'Join an existing channel.')
-def join_command_cb(buffer, channel):
-    buffer.send(Join, channel=channel)
+def join_command_cb(buffer, channel=None):
+    def join_cb(_client, _join, update):
+        if update.channel not in buffer.server.buffers:
+            Buffer(buffer.server, update.channel)
+        buffer.server.buffers[update.channel].display()
+    buffer.send_cb(join_cb, Join, channel=channel)
 
 @lichat_command('leave', 'Leave a channel you\'re in. Defaults to the current channel.')
 def leave_command_cb(buffer, channel=None):
