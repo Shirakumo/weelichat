@@ -165,6 +165,10 @@ class Server:
         self.host = host
         self.port = port
         self.ssl = ssl
+        
+        emote_dir = w.info_get('weechat_dir', '')+'/lichat/emotes/'+self.host+'/'
+        w.mkdir_parents(emote_dir, 0o755)
+        client.reload_emotes(emote_dir)
 
         def on_misc(client, update):
             if isinstance(update, Failure):
@@ -178,6 +182,9 @@ class Server:
                 self.show(update, text=f"has disabled pause mode in {u.channel}", kind='action')
             else:
                 self.show(update, text=f"has enabled pause mode by {u.by} in {u.channel}", kind='action')
+
+        def on_emote(client, update):
+            self.client.emotes[update.name].offload(emote_dir)
 
         def on_data(client, update):
             if imgur_client_id != None and u['content-type'] in imgur_formats:
@@ -197,6 +204,7 @@ class Server:
         client.add_handler(Join, display)
         client.add_handler(Leave, display)
         client.add_handler(Pause, on_pause)
+        client.add_handler(Emote, on_emote)
         client.add_handler(Data, on_data)
         client.add_handler(SetChannelInfo, on_channel_info)
         servers[name] = self
@@ -296,7 +304,7 @@ def lichat_command(name, description=''):
 def connect_command_cb(w_buffer, name=None, hostname=None, port=None, username=None, password=None, ssl=None):
     if name == None:
         for server in servers:
-            if not server.is_connected():
+            if not servers[server].is_connected():
                 servers[server].connect()
     elif hostname != None:
         if name in servers:
@@ -638,8 +646,7 @@ def config_section(file, section_name, options):
 if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
                         SCRIPT_LICENSE, SCRIPT_DESC, '', ''):
-        extensions.remove('shirakumo-emotes')
-
+        
         config_file = w.config_new('lichat', 'config_reload_cb', '')
         config_section(config_file, 'behaviour', [
             {'name': 'imgur_client_id', 'default': ''}
