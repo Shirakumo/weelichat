@@ -326,7 +326,7 @@ def connect_command_cb(w_buffer, name=None, hostname=None, port=None, username=N
 @raw_command('help', 'Display help information about lichat commands.')
 def help_command_cb(w_buffer, topic=None):
     if topic == None:
-        for name in commands:
+        for name in sorted(commands):
             command = commands[name]
             w.prnt(w_buffer, f"{name}\t{command['description']}")
     else:
@@ -504,6 +504,7 @@ def deny_command_cb(buffer, update, target=None, channel=None):
 
 ## TODO: edit, data
 ## TODO: display confirmation when command for quiet/unquiet/pause/grant/deny/etc. has gone through.
+## TODO: autocompletion
 
 def upload_file(data):
     data = json.loads(data)
