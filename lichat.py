@@ -26,7 +26,7 @@ try:
     import base64
     from pylichat import Client
     from pylichat.update import *
-    from pylichat.symbol import kw
+    from pylichat.symbol import kw, li
     import pylichat.wire
 except ImportError as message:
     print('Missing package(s) for %s: %s' % (SCRIPT_NAME, message))
@@ -426,7 +426,61 @@ def user_info_command_cb(buffer, target):
         buffer.show(text=f"Info on {target}: {target.connections} connections, {registered}")
     buffer.send_cb(callback, UserInfo, target=target)
 
-## TODO: permissions, edit, data
+@lichat_command('grant', 'Grant permission for an update to a user. If no user is given, the permission is granted to everyone. If no channel name is given, defaults to the current channel.')
+def grant_command_cb(buffer, update, target=None, channel=None):
+    type = li(update)
+    def update(rule):
+        buffer.send(Permissions, channel=channel, permissions=[[type, rule]])
+    if target == None:
+        update(True)
+    else:
+        def callback(_client, _prev, update):
+            for entry in update.permissions:
+                if entry[0] == type:
+                    rule = entry[1]
+                    if rule == True:
+                        pass
+                    elif rule == False or rule == []:
+                        update([li('+'), buffer.server.client.username])
+                    elif rule[0] == li('-'):
+                        if target in rule:
+                            rule.remove(target)
+                            update(rule)
+                    elif rule[0] == li('+'):
+                        if target not in rule:
+                            rule.append(target)
+                            update(rule)
+                    break
+                buffer.send_cb(callback, Permissions, channel=channel)
+
+@lichat_command('deny', 'Deny permission for an update from a user. If no user is given, the permission is denied to everyone but you. If no channel name is given, defaults to the current channel.')
+def deny_command_cb(buffer, update, target=None, channel=None):
+    type = li(update)
+    def update(rule):
+        buffer.send(Permissions, channel=channel, permissions=[[type, rule]])
+    if target == None:
+        update([li('+'), buffer.server.client.username])
+    else:
+        def callback(_client, _prev, update):
+            for entry in update.permissions:
+                if entry[0] == type:
+                    rule = entry[1]
+                    if rule == True:
+                        update([li('-'), buffer.server.client.username])
+                    elif rule == False or rule == []:
+                        pass
+                    elif rule[0] == li('-'):
+                        if target not in rule:
+                            rule.append(target)
+                            update(rule)
+                    elif rule[0] == li('+'):
+                        if target in rule:
+                            rule.remove(target)
+                            update(rule)
+                    break
+        buffer.send_cb(callback, Permissions, channel=channel)
+
+## TODO: edit, data
 
 def upload_file(data):
     data = json.loads(data)
