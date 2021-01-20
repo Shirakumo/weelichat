@@ -285,7 +285,7 @@ def connect_command_cb(w_buffer, name=None, hostname=None, port=None, username=N
             {'name': 'username', 'default': username},
             {'name': 'password', 'default': password},
             {'name': 'channels', 'default': ''},
-            {'name': 'connect', 'default': True}
+            {'name': 'connect', 'default': True},
             {'name': 'ssl', 'default': ssl}
         ])
     elif name not in servers:
@@ -555,7 +555,7 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.password', 'default': ''},
             {'name': 'tynet.channels', 'default': 'lichatters'},
             {'name': 'tynet.connect', 'default': False},
-            {'name': 'ssl', 'default': False}
+            {'name': 'tynet.ssl', 'default': False}
         ])
         config_reload_cb('', config_file)
         
