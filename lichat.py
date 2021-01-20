@@ -125,9 +125,14 @@ class Buffer:
     def display(self):
         w.command(self.buffer, f"/buffer {self.w_name()}")
 
-    def show(self, update=None, text=None, kind='text'):
+    def show(self, update=None, text=None, kind='text', tags=[]):
+        time = 0
         if update == None:
             update = {'from': self.server.client.servername}
+        else:
+            time = update.unix_clock()
+            if update['from'] == self.server.client.username:
+                tags.append(f"lichat_self_{update.id}")
         if text == None:
             if isinstance(update, Join):
                 kind = 'join'
@@ -137,10 +142,11 @@ class Buffer:
                 text = f"left {update.channel}"
             else:
                 text = update.get('text', f"Update of type {type(update).__name__}")
+        tags = ','.join(tags)
         if kind == 'text':
-            w.prnt(self.buffer, f"{update['from']}\t{text}")
+            w.prnt_date_tags(self.buffer, time, tags, f"{update['from']}\t{text}")
         else:
-            w.prnt(self.buffer, f"{w.prefix(kind)}{update['from']}: {text}")
+            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{update['from']}: {text}")
 
     def edit(self, update, text=None):
         ## FIXME: Do edit magic based on update id here
