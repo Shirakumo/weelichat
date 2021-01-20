@@ -101,14 +101,21 @@ class Buffer:
     def delete(self):
         del self.server.buffers[self.channel]
 
-    def send(self, type, **args):
-        if issubclass(type, ChannelUpdate) and 'channel' not in args:
+    def complete_channel(self, args):
+        if args.get('channel', None) == None:
             args['channel'] = self.channel
+        elif args['channel'].starts_with('/'):
+            if self.server.is_supported('shirakumo-channel-trees'):
+                args['channel'] = self.channel + args['channel']
+
+    def send(self, type, **args):
+        if issubclass(type, ChannelUpdate):
+            self.complete_channel(args)
         return self.server.send(type, **args)
 
     def send_cb(self, cb, type, **args):
-        if issubclass(type, ChannelUpdate) and 'channel' not in args:
-            args['channel'] = self.channel
+        if issubclass(type, ChannelUpdate):
+            self.complete_channel(args)
         return self.server.send_cb(cb, type, **args)
 
     def show(self, update=None, text=None, kind='text'):
@@ -180,6 +187,9 @@ class Server:
         client.add_handler(Data, on_data)
         client.add_handler(SetChannelInfo, on_channel_info)
         servers[name] = self
+
+    def is_supported(self, extension):
+        return self.client.is_supported(extension)
 
     def is_connected(self):
         return self.hook != None
@@ -390,11 +400,11 @@ def users_command_cb(buffer, channel=None):
         buffer.show(text=f"Currently in channel: {' '.join(users.users)}")
     buffer.send_cb(callback, Users, channel=channel)
 
-@lichat_command('channels', 'List the channels of the current server.')
-def channels_command_cb(buffer):
+@lichat_command('channels', 'List the channels of the current server. If the server supports the channel-trees extension, only channels below the specified channel are retuurned. If no channel is specified, all top-level channels are returned.')
+def channels_command_cb(buffer, channel=''):
     def callback(_client, _prev, channels):
         buffer.show(text=f"Channels: {' '.join(channels.channels)}")
-    buffer.send_cb(callback, Channels)
+    buffer.send_cb(callback, Channels, channel=channel)
 
 @lichat_command('user-info', 'Request information on the given user.')
 def user_info_command_cb(buffer, target):
@@ -405,7 +415,6 @@ def user_info_command_cb(buffer, target):
         buffer.show(text=f"Info on {target}: {target.connections} connections, {registered}")
     buffer.send_cb(callback, UserInfo, target=target)
 
-## TODO: handle channel-tree channel name prepend if start with slash, allow specifying channel in channels
 ## TODO: permissions, edit, data
 
 def upload_file(data):
