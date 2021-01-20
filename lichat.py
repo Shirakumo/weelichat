@@ -120,6 +120,11 @@ class Buffer:
             self.complete_channel(args)
         return self.server.send(type, **args)
 
+    def send_confirm(self, message, type, **args):
+        def callback(_client, _previous, update):
+            self.show(update, text=message, kind='action')
+        self.send_cb(callback, type, **args)
+
     def send_cb(self, cb, type, **args):
         if issubclass(type, ChannelUpdate):
             self.complete_channel(args)
@@ -143,6 +148,9 @@ class Buffer:
             elif isinstance(update, Leave):
                 kind = 'quit'
                 text = f"left {update.channel}"
+            elif isinstance(update, Kick):
+                kind = 'quit'
+                text = f"has kicked {update.target} from {update.channel}"
             else:
                 text = update.get('text', f"Update of type {type(update).__name__}")
         tags = ','.join(tags)
@@ -206,6 +214,7 @@ class Server:
         client.add_handler(Message, display)
         client.add_handler(Join, display)
         client.add_handler(Leave, display)
+        client.add_handler(Kick, display)
         client.add_handler(Pause, on_pause)
         client.add_handler(Emote, on_emote)
         client.add_handler(Data, on_data)
@@ -394,6 +403,7 @@ def register_command_cb(buffer, password):
     def reg_cb(_client, _prev, update):
         if isinstance(update, Register):
             w.config_option_set(config['server'][buffer.server.name+'.password'], password, 0)
+        buffer.show(update, text="Profile registered. Password has been saved.")
     buffer.send_cb(reg_cb, Register, password=password)
 
 @lichat_command('set-channel-info', """Set channel information. If no channel name is given, defaults to the current channel.
@@ -425,27 +435,33 @@ def pause_command_cb(buffer, pause="0", channel=None):
 
 @lichat_command('quiet', 'Quiets the given user. If no channel name is given, defaults to the current channel.')
 def quiet_command_cb(buffer, target, channel=None):
-    buffer.send(Quiet, channel=channel, target=target)
+    buffer.send_confirm(f"The user {target} has been quieted. Their messages will no longer be visible.",
+                        Quiet, channel=channel, target=target)
 
 @lichat_command('unquiet', 'Unquiets the given user. If no channel name is given, defaults to the current channel.')
 def unquiet_command_cb(buffer, target, channel=None):
-    buffer.send(Unquiet, channel=channel, target=target)
+    buffer.send_confirm(f"The user {target} has been allowed messaging again.",
+                        Unquiet, channel=channel, target=target)
 
 @lichat_command('ban', 'Bans the given user from the server by username.')
 def ban_command_cb(buffer, target):
-    buffer.send(Ban, target=target)
+    buffer.send_confirm(f"The user {target} has been banned.",
+                        Ban, target=target)
 
 @lichat_command('unban', 'Unbans the given username from the server.')
 def unban_command_cb(buffer, target):
-    buffer.send(Unban, target=target)
+    buffer.send_confirm(f"The user {target} has been unbanned.",
+                        Unban, target=target)
 
 @lichat_command('ip-ban', 'Bans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
 def ip_ban_command_cb(buffer, ip, mask='::'):
-    buffer.send(IpBan, ip=ip, mask=mask)
+    buffer.send_confirm(f"The ip {ip} under {mask} has been banned.",
+                        IpBan, ip=ip, mask=mask)
 
 @lichat_command('ip-unban', 'Unbans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
 def ip_unban_command_cb(buffer, ip, mask='::'):
-    buffer.send(IpUnban, ip=ip, mask=mask)
+    buffer.send_confirm(f"The ip {ip} under {mask} has been unbanned.",
+                        IpUnban, ip=ip, mask=mask)
 
 @lichat_command('message', 'Send a message to the given channel.')
 def message_command_cb(buffer, channel, *args):
@@ -476,20 +492,23 @@ def user_info_command_cb(buffer, target):
 def grant_command_cb(buffer, update, target=None, channel=None):
     type = li(update)
     if target == None:
-        buffer.send(Permissions, channel=channel, permissions=[[type, True]])
+        buffer.send_confirm(f"All users have been allowed {update}ing",
+                            Permissions, channel=channel, permissions=[[type, True]])
     else:
-        buffer.send(Grant, channel=channel, target=target, update=type)
+        buffer.send_confirm(f"{target} has been allowed {update}ing",
+                            Grant, channel=channel, target=target, update=type)
 
 @lichat_command('deny', 'Deny permission for an update from a user. If no user is given, the permission is denied to everyone but you. If no channel name is given, defaults to the current channel.')
 def deny_command_cb(buffer, update, target=None, channel=None):
     type = li(update)
     if target == None:
-        buffer.send(Permissions, channel=channel, permissions=[[type, [li('+'), buffer.server.client.username]]])
+        buffer.send_confirm(f"All users have been denied from {update}ing",
+                            Permissions, channel=channel, permissions=[[type, [li('+'), buffer.server.client.username]]])
     else:
-        buffer.send(Deny, channel=channel, target=target, update=type)
+        buffer.send_confrm(f"{target} has been denied from {update}ing",
+                           Deny, channel=channel, target=target, update=type)
 
 ## TODO: edit, data
-## TODO: display confirmation when command for quiet/unquiet/pause/grant/deny/etc. has gone through.
 ## TODO: autocompletion
 
 def upload_file(data):
