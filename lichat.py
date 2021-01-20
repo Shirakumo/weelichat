@@ -475,56 +475,18 @@ def user_info_command_cb(buffer, target):
 @lichat_command('grant', 'Grant permission for an update to a user. If no user is given, the permission is granted to everyone. If no channel name is given, defaults to the current channel.')
 def grant_command_cb(buffer, update, target=None, channel=None):
     type = li(update)
-    def update(rule):
-        buffer.send(Permissions, channel=channel, permissions=[[type, rule]])
     if target == None:
-        update(True)
+        buffer.send(Permissions, channel=channel, permissions=[[type, True]])
     else:
-        def callback(_client, _prev, update):
-            for entry in update.permissions:
-                if entry[0] == type:
-                    rule = entry[1]
-                    if rule == True:
-                        pass
-                    elif rule == False or rule == []:
-                        update([li('+'), buffer.server.client.username])
-                    elif rule[0] == li('-'):
-                        if target in rule:
-                            rule.remove(target)
-                            update(rule)
-                    elif rule[0] == li('+'):
-                        if target not in rule:
-                            rule.append(target)
-                            update(rule)
-                    break
-                buffer.send_cb(callback, Permissions, channel=channel)
+        buffer.send(Grant, channel=channel, target=target, update=type)
 
 @lichat_command('deny', 'Deny permission for an update from a user. If no user is given, the permission is denied to everyone but you. If no channel name is given, defaults to the current channel.')
 def deny_command_cb(buffer, update, target=None, channel=None):
     type = li(update)
-    def update(rule):
-        buffer.send(Permissions, channel=channel, permissions=[[type, rule]])
     if target == None:
-        update([li('+'), buffer.server.client.username])
+        buffer.send(Permissions, channel=channel, permissions=[[type, [li('+'), buffer.server.client.username]]])
     else:
-        def callback(_client, _prev, update):
-            for entry in update.permissions:
-                if entry[0] == type:
-                    rule = entry[1]
-                    if rule == True:
-                        update([li('-'), buffer.server.client.username])
-                    elif rule == False or rule == []:
-                        pass
-                    elif rule[0] == li('-'):
-                        if target not in rule:
-                            rule.append(target)
-                            update(rule)
-                    elif rule[0] == li('+'):
-                        if target in rule:
-                            rule.remove(target)
-                            update(rule)
-                    break
-        buffer.send_cb(callback, Permissions, channel=channel)
+        buffer.send(Deny, channel=channel, target=target, update=type)
 
 ## TODO: edit, data
 ## TODO: display confirmation when command for quiet/unquiet/pause/grant/deny/etc. has gone through.
