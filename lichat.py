@@ -131,12 +131,13 @@ class Server:
     buffers = {}
     hook = None
 
-    def __init__(self, name=None, username=None, password=None, host='chat.tymoon.eu', port=1111):
+    def __init__(self, name=None, username=None, password=None, host='chat.tymoon.eu', port=1111, ssl=False):
         client = Client(username, password)
         self.name = name
         self.client = client
         self.host = host
         self.port = port
+        self.ssl = ssl
 
         def on_misc(client, update):
             if isinstance(update, Failure):
@@ -178,7 +179,7 @@ class Server:
 
     def connect(self):
         if self.hook == None:
-            self.client.connect(self.host, self.port)
+            self.client.connect(self.host, self.port, ssl=self.ssl)
             self.hook = w.hook_fd(self.client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', self.name)
 
     def disconnect(self):
@@ -262,13 +263,16 @@ def lichat_command(name, description=''):
     return nested
 
 @raw_command('connect', 'Connect to an existing server configuration or create a new one.')
-def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, password=None):
+def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, password=None, ssl=None):
     if name not in servers:
         if hostname == None: hostname = cfg('server_default', 'host')
         if port == None: port = cfg('server_default', 'port', int)
         if username == None: username = cfg('server_default', 'username')
         if password == None: password = cfg('server_default', 'password')
-        Server(name=name, username=username, password=password, host=host, port=port)
+        if ssl == None: ssl = cfg('server_default', 'ssl', bool)
+        if ssl == 'on': ssl = True
+        if ssl == 'off': ssl = False
+        Server(name=name, username=username, password=password, host=host, port=port, ssl=ssl)
         config_section(config_file, 'server', [
             {'name': 'host', 'default': hostname},
             {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
@@ -276,6 +280,7 @@ def connect_command_cb(w_buffer, name, hostname=None, port=None, username=None, 
             {'name': 'password', 'default': password},
             {'name': 'channels', 'default': ''},
             {'name': 'connect', 'default': True}
+            {'name': 'ssl', 'default': ssl}
         ])
     servers[name].connect()
 
@@ -473,11 +478,12 @@ def config_reload_cb(_data, file):
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
     for server, sconf in servers_options().items():
         if server not in servers:
-            Server(server,
-                   w.config_string(sconf['username']),
-                   w.config_string(sconf['password']),
-                   w.config_string(sconf['host']),
-                   w.config_integer(sconf['port']))
+            Server(name=server,
+                   username=w.config_string(sconf['username']),
+                   password=w.config_string(sconf['password']),
+                   host=w.config_string(sconf['host']),
+                   port=w.config_integer(sconf['port']),
+                   ssl=w.config_boolean(sconf['ssl']))
         instance = servers[server]
         if w.config_boolean(sconf['connect']) and not instance.is_connected():
             instance.connect()
@@ -530,7 +536,8 @@ if __name__ == '__main__' and import_ok:
             {'name': 'username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
             {'name': 'password', 'default': ''},
             {'name': 'channels', 'default': ''},
-            {'name': 'connect', 'default': True}
+            {'name': 'connect', 'default': True},
+            {'name': 'ssl', 'default': False}
         ])
         config_section(config_file, 'server', [
             {'name': 'tynet.host', 'default': 'chat.tymoon.eu'},
@@ -538,7 +545,8 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
             {'name': 'tynet.password', 'default': ''},
             {'name': 'tynet.channels', 'default': 'lichatters'},
-            {'name': 'tynet.connect', 'default': False}
+            {'name': 'tynet.connect', 'default': False},
+            {'name': 'ssl', 'default': False}
         ])
         config_reload_cb('', config_file)
         
