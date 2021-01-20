@@ -44,6 +44,9 @@ servers = {}
 def register_command(name, func, description='', cmdtype='lichat'):
     commands[name] = {'name': name, 'func': func, 'description': description, 'cmdtype': cmdtype}
 
+def call_command(buffer, name, *args):
+    return commands[name]['func']('', buffer.buffer, shlex.join(args))
+
 def find_buffer(server, channel):
     server = servers.get(server, None)
     if server != None:
@@ -272,7 +275,7 @@ def check_signature(f, args, command=None):
 def raw_command(name, description=''):
     def nested(f):
         @wraps(f)
-        def wrapper(data, w_buffer, args_str):
+        def wrapper(_data, w_buffer, args_str):
             args = shlex.split(args_str)
             args.pop(0)
             if check_signature(f, [w_buffer, *args], command=name):
@@ -287,7 +290,7 @@ def raw_command(name, description=''):
 def lichat_command(name, description=''):
     def nested(f):
         @wraps(f)
-        def wrapper(data, w_buffer, args_str):
+        def wrapper(_data, w_buffer, args_str):
             buffer = weechat_buffer_to_representation(w_buffer)
             if buffer is None:
                 return w.WEECHAT_RC_OK
@@ -380,6 +383,11 @@ def pull_command_cb(buffer, user, channel=None):
 @lichat_command('kick', 'Kicks another user from a channel. If no channel name is given, defaults to the current channel.')
 def kick_command_cb(buffer, user, channel=None):
     buffer.send(Kick, channel=channel, target=user)
+
+@lichat_command('kickban', 'Kicks another user from a channel and removes their join permission. If no channel name is given, defaults to the current channel.')
+def kickban_command_cb(buffer, user, channel=None):
+    call_command(buffer, 'deny', 'join', user, channel)
+    call_command(buffer, 'kick', user, channel)
 
 @lichat_command('register', 'Register your account with a password. If successful, will save the password to config.')
 def register_command_cb(buffer, password):
@@ -690,6 +698,7 @@ if __name__ == '__main__' and import_ok:
         w.hook_command_run('/part', 'leave_command_cb', '')
         w.hook_command_run('/invite', 'pull_command_cb', '')
         w.hook_command_run('/kick', 'kick_command_cb', '')
+        w.hook_command_run('/kickban', 'kickban_command_cb', '')
         w.hook_command_run('/register', 'register_command_cb', '')
         w.hook_command_run('/topic', 'topic_command_cb', '')
 
