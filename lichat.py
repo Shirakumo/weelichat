@@ -115,7 +115,14 @@ class Buffer:
         if update == None:
             update = {'from': self.server.client.servername}
         if text == None:
-            text = update.get('text', f"Update of type {type(update).__name__}")
+            if isinstance(update, Join):
+                kind = 'join'
+                text = f"joined {update.channel}"
+            elif isinstance(update, Leave):
+                kind = 'quit'
+                text = f"left {update.channel}"
+            else:
+                text = update.get('text', f"Update of type {type(update).__name__}")
         if kind == 'text':
             w.prnt(self.buffer, f"{update['from']}\t{text}")
         else:
