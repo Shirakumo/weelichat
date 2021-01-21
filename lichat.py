@@ -19,11 +19,14 @@ except ImportError:
 try:
     from functools import wraps
     from inspect import signature
+    from pathlib import Path
     import shlex
     import json
     import requests
     import socket
     import base64
+    import re
+    import mimetypes
     from pylichat import Client
     from pylichat.update import *
     from pylichat.symbol import kw, li
@@ -115,6 +118,11 @@ class Buffer:
             if self.server.is_supported('shirakumo-channel-trees'):
                 args['channel'] = self.channel + args['channel']
 
+    def make_instance(self, type, **args):
+        if issubclass(type, ChannelUpdate):
+            self.complete_channel(args)
+        return self.server.client.make_instance(type, **args)
+            
     def send(self, type, **args):
         if issubclass(type, ChannelUpdate):
             self.complete_channel(args)
@@ -516,9 +524,72 @@ def deny_command_cb(buffer, update, target=None, channel=None):
         buffer.send_confrm(f"{target} has been denied from {update}ing",
                            Deny, channel=channel, target=target, update=type)
 
-## TODO: edit, data
+@lichat_command('send', 'Send a local file or file from an URL as a data upload. If no channel name is given, defaults to the current channel.')
+def send_command_cb(buffer, file, channel=None):
+    update = buffer.make_instance(Data, channel=channel)
+    data = update.__dict__
+    data['server'] = buffer.server.name
+    data['url'] = file
+    if re.match('^(\\w:|/|~)', file):
+        w.hook_process('func:read_file', 0, 'process_send', json.dumps(data))
+    else:
+        w.hook_process('func:download_file', 0, 'process_send', json.dumps(data))
+    buffer.show(update, text=f"Sending file...", kind='action')
+
+## TODO: edit
 ## TODO: autocompletion
 ## TODO: properly handle disconnections initiated by the server.
+
+def read_file(data):
+    data = json.loads(data)
+    try:
+        with open(data['url'], 'rb') as file:
+            data['payload'] = str(base64.b64encode(file.read()))
+        (content_type, _) = mimetypes.guess_type(data['url'], False)
+        data['content-type'] = content_type
+        data['filename'] = Path(data['url']).stem
+
+        buffer = find_buffer(data['server'], data['channel'])
+        if buffer != None:
+            buffer.send(Data, **data)
+        data['payload'] = True
+    except Exception as e:
+        data['text'] = f"Internal error: {e}"
+    return json.dumps(data)
+
+def download_file(data):
+    data = json.loads(data)
+    try:
+        r = requests.get(data['url'], allow_redirects=True)
+        if r.status_code == 200:
+            data['payload'] = str(base64.b64encode(r.content))
+            data['content-type'] = r.headers.get('content-type')
+            match = re.compile('filename="([^"]+)"').search(r.headers.get('content-disposition') or '')
+            if match != None:
+                data['filename'] = match.group(1)
+            else:
+                data['filename'] = data['url'].rsplit('/', 1)[1]
+            
+            buffer = find_buffer(data['server'], data['channel'])
+            if buffer != None:
+                buffer.send(Data, **data)
+            data['payload'] = True
+        else:
+            data['text'] = f"URL unreachable: error {r.status_code}"
+    except Exception as e:
+        data['text'] = f"Internal error: {e}"
+    return json.dumps(data)
+
+def process_send(_data, _command, return_code, out, err):
+    if return_code == w.WEECHAT_HOOK_PROCESS_ERROR or out == '':
+        w.prnt("", "Failed to download file.")
+    else:
+        data = json.loads(out)
+        buffer = find_buffer(data['server'], data['channel'])
+        if buffer != None:
+            if data.get('payload', None) == None:
+                buffer.edit(make_instance(Failure, **data))
+    return w.WEECHAT_RC_OK
 
 def upload_file(data):
     data = json.loads(data)
