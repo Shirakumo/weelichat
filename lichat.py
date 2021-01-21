@@ -339,6 +339,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
             w.prnt(w_buffer, f"f{w.prefix('error')} A server of that name already exists.")
             return
         if port == None: port = cfg('server_default', 'port', int)
+        else: port = int(port)
         if username == None: username = cfg('server_default', 'username')
         if password == None: password = cfg('server_default', 'password')
         if ssl == None: ssl = cfg('server_default', 'ssl', bool)
