@@ -329,12 +329,12 @@ def lichat_command(name, description=''):
     return nested
 
 @raw_command('connect', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
-def connect_command_cb(w_buffer, name=None, hostname=None, port=None, username=None, password=None, ssl=None):
+def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None, password=None, ssl=None):
     if name == None:
         for server in servers:
             if not servers[server].is_connected():
                 servers[server].connect()
-    elif hostname != None:
+    elif host != None:
         if name in servers:
             w.prnt(w_buffer, f"f{w.prefix('error')} A server of that name already exists.")
             return
@@ -346,7 +346,7 @@ def connect_command_cb(w_buffer, name=None, hostname=None, port=None, username=N
         if ssl == 'off': ssl = False
         Server(name=name, username=username, password=password, host=host, port=port, ssl=ssl).connect()
         config_section(config_file, 'server', [
-            {'name': 'host', 'default': hostname},
+            {'name': 'host', 'default': host},
             {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
             {'name': 'username', 'default': username},
             {'name': 'password', 'default': password},
