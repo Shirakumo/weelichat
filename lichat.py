@@ -32,10 +32,10 @@ except ImportError as message:
     print('Missing package(s) for %s: %s' % (SCRIPT_NAME, message))
     import_ok = False
 
-imgur_client_id = None
-imgur_formats = ['video/mp4' 'video/webm' 'video/x-matroska' 'video/quicktime'
-                 'video/x-flv' 'video/x-msvideo' 'video/x-ms-wmv' 'video/mpeg'
-                 'image/png' 'image/jpeg' 'image/gif' 'image/tiff' 'image/vnd.mozilla.apng']
+imgur_client_id = ''
+imgur_formats = ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime',
+                 'video/x-flv', 'video/x-msvideo', 'video/x-ms-wmv', 'video/mpeg',
+                 'image/png', 'image/jpeg', 'image/gif', 'image/tiff', 'image/vnd.mozilla.apng']
 config_file = None
 config = {}
 commands = {}
@@ -202,13 +202,13 @@ class Server:
             self.client.emotes[update.name].offload(emote_dir)
 
         def on_data(client, update):
-            if imgur_client_id != None and u['content-type'] in imgur_formats:
-                data = u.__dict__
+            if imgur_client_id != '' and update['from'] != self.client.username and update['content-type'] in imgur_formats:
+                data = update.__dict__
                 data['server'] = name
                 w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
-                self.show(update, text=f"Sent file {u['filename']} (Uploading...)", kind='action')
+                self.show(update, text=f"Sent file {update['filename']} (Uploading...)", kind='action')
             else:
-                self.show(update, text=f"Sent file {u['filename']}", kind='action')
+                self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})", kind='action')
 
         def on_channel_info(client, update):
             (_, name) = update.key
@@ -525,7 +525,7 @@ def upload_file(data):
         headers = {'Authorization': f'Client-ID {imgur_client_id}'}
         post = {'type': 'file', 'title': data['filename']}
         files = {}
-        if data['content_type'].startswith('image'):
+        if data['content-type'].startswith('image'):
             files['image'] = (data['filename'], base64.b64decode(data['payload']), data['content-type'])
         else:
             files['video'] = (data['filename'], base64.b64decode(data['payload']), data['content-type'])
@@ -533,20 +533,23 @@ def upload_file(data):
         response = json.loads(r.text)
         if response['success']:
             data['payload'] = response['data']['link']
-            return json.dumps(data)
+            data['text'] = f"Sent file {response['data']['link']}"
         else:
-            return ''
-    except Exception:
-        return ''
+            data['payload'] = ''
+            data['text'] = f"Imgur failed: {response['data']['error']}"
+    except Exception as e:
+        data['text'] = f"Internal error: {e}"
+    return json.dumps(data)
 
-def process_upload(data, command, return_code, out, err):
+def process_upload(_data, _command, return_code, out, err):
     if return_code == w.WEECHAT_HOOK_PROCESS_ERROR or out == '':
         w.prnt("", "Failed to upload file.")
     else:
         data = json.loads(out)
+        update = make_instance(Message, **data)
         buffer = find_buffer(data['server'], data['channel'])
         if buffer != None:
-            buffer.edit(data, text=f"Sent file {u['payload']}")
+            buffer.edit(update)
     return w.WEECHAT_RC_OK
 
 def lichat_cb(data, w_buffer, args_str):
@@ -602,6 +605,7 @@ def config_delete_option_cb(section_name, file, section, option):
 
 def config_reload_cb(_data, file):
     w.config_reload(file)
+    global imgur_client_id
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
     for server, sconf in servers_options().items():
         if server not in servers:
