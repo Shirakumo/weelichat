@@ -518,6 +518,7 @@ def deny_command_cb(buffer, update, target=None, channel=None):
 
 ## TODO: edit, data
 ## TODO: autocompletion
+## TODO: properly handle disconnections initiated by the server.
 
 def upload_file(data):
     data = json.loads(data)
