@@ -181,6 +181,10 @@ class Server:
         w.mkdir_parents(emote_dir, 0o755)
         client.reload_emotes(emote_dir)
 
+        def on_connect(client, update):
+            for channel in self.config('channels').split('  '):
+                self.send(Join, channel=channel)
+        
         def on_misc(client, update):
             if isinstance(update, Failure):
                 self.show(update, kind='error')
@@ -209,7 +213,8 @@ class Server:
         def on_channel_info(client, update):
             (_, name) = update.key
             self.show(update, text=f"{name}: {text}", kind='action')
-        
+
+        client.add_handler(Connect, on_connect)
         client.add_handler(Update, on_misc)
         client.add_handler(Message, display)
         client.add_handler(Join, display)
@@ -220,6 +225,9 @@ class Server:
         client.add_handler(Data, on_data)
         client.add_handler(SetChannelInfo, on_channel_info)
         servers[name] = self
+
+    def config(self, key, type=str):
+        return cfg('server', self.name+'.'+key, type)
 
     def is_supported(self, extension):
         return self.client.is_supported(extension)
@@ -606,8 +614,6 @@ def config_reload_cb(_data, file):
         instance = servers[server]
         if w.config_boolean(sconf['connect']) and not instance.is_connected():
             instance.connect()
-            for channel in w.config_string(sconf['channels']).split('  '):
-                instance.send(Join, channel=channel)
     return w.WEECHAT_RC_OK
 
 def config_section(file, section_name, options):
