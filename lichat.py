@@ -27,6 +27,7 @@ try:
     import base64
     import re
     import mimetypes
+    import time
     from pylichat import Client
     from pylichat.update import *
     from pylichat.symbol import kw, li
@@ -35,6 +36,8 @@ except ImportError as message:
     print('Missing package(s) for %s: %s' % (SCRIPT_NAME, message))
     import_ok = False
 
+data_save_directory = ''
+data_save_types = []
 imgur_client_id = ''
 imgur_formats = ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime',
                  'video/x-flv', 'video/x-msvideo', 'video/x-ms-wmv', 'video/mpeg',
@@ -252,11 +255,15 @@ class Server:
             self.client.emotes[update.name].offload(emote_dir)
 
         def on_data(client, update):
+            data = update.__dict__
+            data['server'] = name
             if imgur_client_id != '' and update['from'] != self.client.username and update['content-type'] in imgur_formats:
-                data = update.__dict__
-                data['server'] = name
                 w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
                 self.show(update, text=f"Sent file {update['filename']} (Uploading...)", kind='action')
+            elif data_save_directory != '' and (data_save_types == ['all'] or update['content-type'] in data_save_types):
+                data['url'] = f"{data_save_directory}/{time.strftime('%Y.%m.%d-%H-%M-%S')}-{data['filename']}"
+                w.hook_process('func:write_file', 0, 'process_upload', json.dumps(data))
+                self.show(update, text=f"Sent file {update['filename']} (Saving...)", kind='action')
             else:
                 self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})", kind='action')
 
@@ -580,7 +587,6 @@ def send_command_cb(buffer, file, channel=None):
     buffer.show(update, text=f"Sending file...", kind='action')
 
 ## TODO: capabilities and server-info
-## TODO: save files to disk
 ## TODO: making edits
 ## TODO: nicklist
 ## TODO: autocompletion
@@ -636,6 +642,17 @@ def process_send(_data, _command, return_code, out, err):
             if data.get('payload', None) == None:
                 buffer.edit(make_instance(Failure, **data))
     return w.WEECHAT_RC_OK
+
+def write_file(data):
+    data = json.loads(data)
+    try:
+        with open(data['url'], 'wb') as file:
+            file.write(base64.b64decode(data['payload']))
+        data['payload'] = ''
+        data['text'] = f"Sent file file://{data['url']}"
+    except Exception as e:
+        data['text'] = f"Internal error: {e}"
+    return json.dumps(data)
 
 def upload_file(data):
     data = json.loads(data)
@@ -723,7 +740,9 @@ def config_delete_option_cb(section_name, file, section, option):
 
 def config_reload_cb(_data, file):
     w.config_reload(file)
-    global imgur_client_id
+    global imgur_client_id, data_save_directory, data_save_types
+    data_save_directory = cfg('behaviour', 'data_save_directory')
+    data_save_types = cfg('behaviour', 'data_save_types').split(',')
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
     for server, sconf in servers_options().items():
         if server not in servers:
@@ -774,6 +793,8 @@ if __name__ == '__main__' and import_ok:
         
         config_file = w.config_new('lichat', 'config_reload_cb', '')
         config_section(config_file, 'behaviour', [
+            {'name': 'data_save_directory', 'default': w.info_get('weechat_dir', '')+'/lichat/downloads/'},
+            {'name': 'data_save_types', 'default': 'all'},
             {'name': 'imgur_client_id', 'default': ''}
         ])
         config_section(config_file, 'server_default', [
