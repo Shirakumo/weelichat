@@ -84,6 +84,32 @@ def input_prompt_cb(data, item, current_window, w_buffer, extra_info):
     
     return f"{w.color(w.config_color(w.config_get('irc.color.input_nick')))}{buffer.server.client.username}"
 
+def edit_buffer(w_buffer, matcher, new_text):
+    h_line = w.hdata_get('line')
+    h_line_data = w.hdata_get('line_data')
+    lines = w.hdata_pointer(w.hdata_get('buffer'), w_buffer, 'own_lines')
+    line = w.hdata_pointer(w.hdata_get('lines'), lines, 'last_line')
+
+    while line and not matcher(h_line, h_line_data, line):
+        line = w.hdata_move(h_line, line, -1)
+
+    line_ptrs = []
+    while line and matcher(h_line, h_line_data, line):
+        line_ptrs.append(line)
+        line = w.hdata_move(h_line, line, -1)
+    line_ptrs.reverse()
+
+    if not line_ptrs: return False
+
+    line_text = new_text.split('\n', len(line_ptrs)-1)
+    line_text = [line.replace('\n', ' | ') for line in line_text]
+    line_text += [''] * (len(line_ptrs) - len(line_text))
+
+    for line, text in zip(line_ptrs, line_text):
+        data = w.hdata_pointer(h_line, line, 'data')
+        w.hdata_update(h_line_data, data, {'message': text})
+    return True
+
 class Buffer:
     name = None
     server = None
@@ -147,8 +173,10 @@ class Buffer:
             update = {'from': self.server.client.servername}
         else:
             time = update.unix_clock()
-            if update['from'] == self.server.client.username:
-                tags.append(f"lichat_self_{update.id}")
+            if update.get('id', None) != None:
+                tags.append(f"lichat_id_{str(update['id'])}")
+            if update.get('from', None) != None:
+                tags.append(f"lichat_from_{update['from']}")
         if text == None:
             if isinstance(update, Join):
                 kind = 'join'
@@ -168,8 +196,22 @@ class Buffer:
             w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{update['from']}: {text}")
 
     def edit(self, update, text=None):
-        ## FIXME: Do edit magic based on update id here
-        self.show(update, text)
+        id = 'lichat_id_'+str(update['id'])
+        source = 'lichat_from_'+update['from']
+        if text == None: text = update['text']
+
+        def matcher(h_line, h_line_data, line):
+            found_id = False
+            found_source = False
+            data = w.hdata_pointer(h_line, line, 'data')
+            for i in range(w.hdata_integer(h_line_data, data, 'tags_count')):
+                tag = w.hdata_string(h_line_data, data, f"{i}|tags_array")
+                if tag == id: found_id = True
+                if tag == source: found_source = True
+                if found_id and found_source: return True
+            return False
+        
+        edit_buffer(self.buffer, matcher, text)
 
 class Server:
     name = None
