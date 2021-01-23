@@ -579,7 +579,10 @@ def send_command_cb(buffer, file, channel=None):
         w.hook_process('func:download_file', 0, 'process_send', json.dumps(data))
     buffer.show(update, text=f"Sending file...", kind='action')
 
-## TODO: edit
+## TODO: capabilities and server-info
+## TODO: save files to disk
+## TODO: making edits
+## TODO: nicklist
 ## TODO: autocompletion
 ## TODO: properly handle disconnections initiated by the server.
 
