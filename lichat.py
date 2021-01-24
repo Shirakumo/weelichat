@@ -346,7 +346,7 @@ class Server:
     def connect(self):
         if self.hook == None:
             self.client.connect(self.host, self.port, ssl=self.ssl)
-            self.hook = w.hook_fd(self.client.socket.fileno(), 1, 0, 0, 'lichat_socket_cb', self.name)
+            self.hook = w.hook_fd(self.client.socket.fileno(), 1, 0, 1, 'lichat_socket_cb', self.name)
 
     def disconnect(self):
         if self.hook != None:
@@ -743,6 +743,7 @@ def me_command_cb(buffer, *text):
     buffer.send(Message, text=f"*{' '.join(text)}*")
 
 ## TODO: autocompletion
+## TODO: when server disconnects, we fail to notice.
 
 def read_file(data):
     data = json.loads(data)
