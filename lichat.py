@@ -121,6 +121,7 @@ class Buffer:
     server = None
     buffer = None
     channel = None
+    nicklist = None
 
     def __init__(self, server, channel, name=None):
         if name == None: name = channel
@@ -130,6 +131,8 @@ class Buffer:
         self.buffer = w.buffer_new(self.w_name(),
                                    'lichat_buffer_input_cb', '',
                                    'lichat_buffer_close_cb', '')
+        self.nicklist = w.nicklist_add_group(self.buffer, '', 'Users', 'weechat.color.nicklist_group', 1)
+        w.buffer_set(self.buffer, 'nicklist', '1')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_lichat_channel', channel)
         server.buffers[channel] = self
@@ -203,6 +206,7 @@ class Buffer:
             w.prnt_date_tags(self.buffer, time, tags, f"{update['from']}\t{text}")
         else:
             w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{update['from']}: {text}")
+        return self
 
     def edit(self, update, text=None):
         id = 'lichat_id_'+str(update['id'])
@@ -220,7 +224,7 @@ class Buffer:
                 if found_id and found_source: return True
             return False
         
-        edit_buffer(self.buffer, matcher, text)
+        return edit_buffer(self.buffer, matcher, text)
 
 class Server:
     name = None
@@ -277,11 +281,23 @@ class Server:
             (_, name) = update.key
             self.show(update, text=f"{name}: {text}")
 
+        def on_join(client, update):
+            buffer = self.show(update)
+            w.nicklist_add_nick(buffer.buffer, buffer.nicklist, update['from'], 'bar_fg', '', 'bar_fg', 1)
+
+        def on_leave(client, update):
+            buffer = self.show(update)
+            if update['from'] == self.client.username:
+                w.nicklist_remove_all(buffer.buffer)
+            else:
+                nick = w.nicklist_search_nick(buffer.buffer, '', update['from'])
+                w.nicklist_remove_nick(buffer.buffer, nick)
+
         client.add_handler(Connect, on_connect)
         client.add_handler(Update, on_misc)
         client.add_handler(Message, show)
-        client.add_handler(Join, show)
-        client.add_handler(Leave, show)
+        client.add_handler(Join, on_join)
+        client.add_handler(Leave, on_leave)
         client.add_handler(Kick, show)
         client.add_handler(Pause, on_pause)
         client.add_handler(Emote, on_emote)
@@ -334,7 +350,7 @@ class Server:
             buffer = self.buffers.get(name, None)
             if buffer == None:
                 buffer = Buffer(self, name)
-        buffer.show(update, text=text, kind=kind)
+        return buffer.show(update, text=text, kind=kind)
 
 def check_signature(f, args, command=None):
     sig = signature(f)
@@ -630,7 +646,6 @@ def server_info_command_cb(buffer, target):
     buffer.send_cb(callback, ServerInfo, target=target)
 
 ## TODO: making edits
-## TODO: nicklist
 ## TODO: autocompletion
 ## TODO: properly handle disconnections initiated by the server.
 
