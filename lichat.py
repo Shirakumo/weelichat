@@ -95,7 +95,7 @@ def reconnect_cb(data, _remaining):
 def format_alist(list, key_separator=': ', entry_separator='\n'):
     return entry_separator.join([f"{x[0]}{key_separator}{x[1]}" for x in list])
 
-def edit_buffer(w_buffer, matcher, new_text):
+def search_buffer(w_buffer, matcher, gather=True):
     h_line = w.hdata_get('line')
     h_line_data = w.hdata_get('line_data')
     lines = w.hdata_pointer(w.hdata_get('buffer'), w_buffer, 'own_lines')
@@ -104,18 +104,25 @@ def edit_buffer(w_buffer, matcher, new_text):
     while line and not matcher(h_line, h_line_data, line):
         line = w.hdata_move(h_line, line, -1)
 
-    line_ptrs = []
-    while line and matcher(h_line, h_line_data, line):
-        line_ptrs.append(line)
-        line = w.hdata_move(h_line, line, -1)
-    line_ptrs.reverse()
+    if gather:
+        line_ptrs = []
+        while line and matcher(h_line, h_line_data, line):
+            line_ptrs.append(line)
+            line = w.hdata_move(h_line, line, -1)
+            line_ptrs.reverse()
+        return line_ptrs
+    return None
 
+def edit_buffer(w_buffer, matcher, new_text):
+    line_ptrs = search_buffer(w_buffer, matcher)
     if not line_ptrs: return False
 
     line_text = new_text.split('\n', len(line_ptrs)-1)
     line_text = [line.replace('\n', ' | ') for line in line_text]
     line_text += [''] * (len(line_ptrs) - len(line_text))
 
+    h_line = w.hdata_get('line')
+    h_line_data = w.hdata_get('line_data')
     for line, text in zip(line_ptrs, line_text):
         data = w.hdata_pointer(h_line, line, 'data')
         w.hdata_update(h_line_data, data, {'message': text})
@@ -190,6 +197,7 @@ class Buffer:
             update = {'from': self.server.client.servername}
         else:
             time = update.unix_clock()
+            tags.append(f"lichat_type_{update.__class__.__name__.lower()}")
             if update.get('id', None) != None:
                 tags.append(f"lichat_id_{str(update['id'])}")
             if update.get('from', None) != None:
@@ -309,6 +317,9 @@ class Server:
                 nick = w.nicklist_search_nick(buffer.buffer, '', update['from'])
                 w.nicklist_remove_nick(buffer.buffer, nick)
 
+        def on_edit(client, update):
+            self.buffers[update.channel].edit(update);
+
         client.add_handler(Connect, on_connect)
         client.add_handler(Disconnect, on_disconnect)
         client.add_handler(Update, on_misc)
@@ -319,6 +330,7 @@ class Server:
         client.add_handler(Pause, on_pause)
         client.add_handler(Emote, on_emote)
         client.add_handler(Data, on_data)
+        client.add_handler(Edit, on_edit)
         client.add_handler(SetChannelInfo, on_channel_info)
         servers[name] = self
 
@@ -673,7 +685,41 @@ def server_info_command_cb(buffer, target):
 """)
     buffer.send_cb(callback, ServerInfo, target=target)
 
-## TODO: making edits
+@lichat_command('edit', 'Edit a previous message.')
+def edit_command_cb(buffer, line=None, *text):
+    if line == None:
+        pass # TODO: interactive edit selection
+    else:
+        line = int(line)+1
+        text = ' '.join(text)
+        source = 'lichat_from_'+buffer.server.client.username
+        message = 'lichat_type_message'
+        seen_ids = ['']
+        def matcher(h_line, h_line_data, line):
+            found_source = False
+            found_message = False
+            id = None
+            data = w.hdata_pointer(h_line, line, 'data')
+            for i in range(w.hdata_integer(h_line_data, data, 'tags_count')):
+                tag = w.hdata_string(h_line_data, data, f"{i}|tags_array")
+                if tag == source: found_source = True
+                if tag == message: found_message = True
+                if tag.startswith('lichat_id_'): id = tag[10:]
+            ## If this is ours, check.
+            if found_source and found_message and id != None:
+                ## If this is a new ID, append it to the stack.
+                if seen_ids[-1] != id:
+                    seen_ids.append(id)
+            ## If we've now reached the first message of the ones we want, we're good to go.
+            return len(seen_ids) == line
+        
+        ## Last ID is now ID we want
+        search_buffer(buffer.buffer, matcher, gather=False)
+        if len(seen_ids) == line:
+            buffer.send(Edit, id=int(seen_ids[-1]), text=text)
+        else:
+            buffer.show(text=f"Only found {len(seen_ids)-1} messages from you. Don't know how to access message {line-1}.", kind='error')
+
 ## TODO: autocompletion
 
 def read_file(data):
