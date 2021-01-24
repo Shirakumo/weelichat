@@ -497,7 +497,7 @@ def help_command_cb(w_buffer, topic=None):
             command = commands[name]
             w.prnt(w_buffer, f"{name}\t{command['description']}")
     else:
-        command = commands.get(topic, None)
+        command = ommcands.get(topic, None)
         if command == None:
             w.prnt(w_buffer, f"{w.prefix('error')} No such command {command}")
         else:
@@ -583,6 +583,16 @@ def quiet_command_cb(buffer, target, channel=None):
 def unquiet_command_cb(buffer, target, channel=None):
     buffer.send_confirm(f"The user {target} has been allowed messaging again.",
                         Unquiet, channel=channel, target=target)
+
+@lichat_command('kill', 'Kills the connections of a user.')
+def kill_command_cb(buffer, target):
+    buffer.send_confirm(f"The user {target} has been killed.",
+                        Kill, target=target)
+
+@lichat_command('destroy', 'Destroys a channel immediately.  If no channel name is given, defaults to the current channel.')
+def destroy_command_cb(buffer, channel=None):
+    buffer.send_confirm(f"The user {target} has been killed.",
+                        Destroy, channel=channel)
 
 @lichat_command('ban', 'Bans the given user from the server by username.')
 def ban_command_cb(buffer, target):
@@ -719,6 +729,18 @@ def edit_command_cb(buffer, line=None, *text):
             buffer.send(Edit, id=int(seen_ids[-1]), text=text)
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages from you. Don't know how to access message {line-1}.", kind='error')
+
+@lichat_command('query', 'Join a private channel with a number of other users.')
+def query_command_cb(buffer, *targets):
+    @handle_failure(buffer)
+    def callback(join):
+        for target in targets:
+            buffer.send(Pull, channel=join.channel, target=target)
+    buffer.server.send_cb(callback, Create)
+
+@lichat_command('me', 'Send a message in third-person.')
+def me_command_cb(buffer, *text):
+    buffer.send(Message, text=f"*{' '.join(text)}*")
 
 ## TODO: autocompletion
 
@@ -957,14 +979,22 @@ if __name__ == '__main__' and import_ok:
                        'args_description',         # args_description
                        '',                         # completion
                        'lichat_cb', '')
+        w.hook_command_run('/ban', 'ban_command_cb', '')
         w.hook_command_run('/disconnect', 'disconnect_command_cb', '')
-        w.hook_command_run('/join', 'join_command_cb', '')
-        w.hook_command_run('/part', 'leave_command_cb', '')
         w.hook_command_run('/invite', 'pull_command_cb', '')
+        w.hook_command_run('/join', 'join_command_cb', '')
         w.hook_command_run('/kick', 'kick_command_cb', '')
         w.hook_command_run('/kickban', 'kickban_command_cb', '')
+        w.hook_command_run('/kill', 'kill_command_cb', '')
+        w.hook_command_run('/me', 'me_command_cb', '')
+        w.hook_command_run('/msg', 'message_command_cb', '')
+        w.hook_command_run('/part', 'leave_command_cb', '')
+        w.hook_command_run('/query', 'query_command_cb', '')
         w.hook_command_run('/register', 'register_command_cb', '')
         w.hook_command_run('/topic', 'topic_command_cb', '')
+        w.hook_command_run('/unban', 'unban_command_cb', '')
+        w.hook_command_run('/users', 'users_command_cb', '')
+        w.hook_command_run('/whois', 'user_info_command_cb', '')
 
         w.bar_item_new('input_prompt', '(extra)input_prompt_cb', '')
         
