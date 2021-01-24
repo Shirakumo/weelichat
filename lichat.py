@@ -149,6 +149,8 @@ class Buffer:
         w.buffer_set(self.buffer, 'nicklist', '1')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_lichat_channel', channel)
+        w.buffer_set(self.buffer, 'localvar_set_lichat_complete_index', '0')
+        w.buffer_set(self.buffer, 'localvar_set_lichat_complete_prefix', '')
         server.buffers[channel] = self
 
     def w_name(self):
@@ -890,6 +892,52 @@ def emote_completion_cb(_data, item, w_buffer, completion):
         w.hook_completion_list_add(completion, ':'+emote+':', 0, w.WEECHAT_LIST_POS_SORT)
     return w.WEECHAT_RC_OK
 
+def last_emote(text, emotes):
+    match = re.match(r'.*:([^:]+):$', text)
+    if match != None and match.group(1).lower() in emotes:
+        return match.group(1)
+
+def input_complete_cb(_data, w_buffer, command):
+    buffer = weechat_buffer_to_representation(w_buffer)
+    if buffer == None: return w.WEECHAT_RC_OK
+
+    ## Reinvent completion engine...
+    text = w.buffer_get_string(w_buffer, 'input')
+    index = int(w.buffer_get_string(w_buffer, 'localvar_lichat_complete_index'))
+    prefix = w.buffer_get_string(w_buffer, 'localvar_lichat_complete_prefix')
+    emotes = buffer.server.client.emotes.keys()
+    try:
+        ## If we aren't ending with a full emote, or the emote is
+        ## from a different prefix than we're used to, reset.
+        last = last_emote(text, emotes)
+        if last == None or not prefix.startswith(text[:-(len(last)+1)]):
+            index = 0
+            prefix = text
+
+        ## Now find all emotes that would match.
+        last_colon = prefix.rindex(':')+1
+        find = prefix[last_colon:].lower()
+        matches = []
+        for emote in emotes:
+            if emote.startswith(find):
+                matches.append(emote)
+
+        ## If there are any matches, select the next one, and update our cache.
+        if 0 < len(matches):
+            matches.sort()
+            match = matches[index]
+            if command == 'input complete_next':
+                index = (index+1) % len(matches)
+            else:
+                index = (index-1) % len(matches)
+            w.buffer_set(w_buffer, 'localvar_set_lichat_complete_index', str(index))
+            w.buffer_set(w_buffer, 'localvar_set_lichat_complete_prefix', prefix)
+            w.command(w_buffer, f"/input delete_line")
+            w.command(w_buffer, f"/input insert {prefix[:last_colon]}{match}:")
+    except:
+        pass
+    return w.WEECHAT_RC_OK
+
 ### Config
 def cfg(section, option, type=str):
     cfg = config[section][option]
@@ -1038,8 +1086,8 @@ if __name__ == '__main__' and import_ok:
         w.hook_completion('lichat_update', 'complete Lichat update types', 'update_completion_cb', '')
         w.hook_completion('lichat_channel_key', 'complete Lichat channel info keys', 'channel_key_completion_cb', '')
         w.hook_completion('lichat_emote', 'complete :emotes: for Lichat', 'emote_completion_cb', '')
+        w.hook_command_run('/input complete_*', 'input_complete_cb', '')
         
         w.prnt("", "lichat.py\tis loaded ok")
 
-## TODO: autocompletion
 ## TODO: when server disconnects, we fail to notice.
