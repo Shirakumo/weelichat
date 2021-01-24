@@ -87,6 +87,11 @@ def input_prompt_cb(data, item, current_window, w_buffer, extra_info):
     
     return f"{w.color(w.config_color(w.config_get('irc.color.input_nick')))}{buffer.server.client.username}"
 
+def reconnect_cb(data, _remaining):
+    server = servers.get(data, None)
+    if server != None:
+        server.reconnect()
+
 def format_alist(list, key_separator=': ', entry_separator='\n'):
     return entry_separator.join([f"{x[0]}{key_separator}{x[1]}" for x in list])
 
@@ -247,6 +252,17 @@ class Server:
         def on_connect(client, update):
             for channel in self.config('channels').split('  '):
                 self.send(Join, channel=channel)
+
+        def on_disconnect(client, update):
+            for channel in self.buffers:
+                buffer = self.buffers[channel]
+                buffer.show(update, text='Disconnected.', kind='network')
+                w.nicklist_remove_all(buffer.buffer)
+            if self.hook != None:
+                w.unhook(self.hook)
+                self.hook = None
+                if self.config('reconnect', bool):
+                    self.reconnect()
         
         def on_misc(client, update):
             if isinstance(update, Failure):
@@ -294,6 +310,7 @@ class Server:
                 w.nicklist_remove_nick(buffer.buffer, nick)
 
         client.add_handler(Connect, on_connect)
+        client.add_handler(Disconnect, on_disconnect)
         client.add_handler(Update, on_misc)
         client.add_handler(Message, show)
         client.add_handler(Join, on_join)
@@ -321,9 +338,19 @@ class Server:
 
     def disconnect(self):
         if self.hook != None:
-            self.client.disconnect()
             w.unhook(self.hook)
             self.hook = None
+            self.client.disconnect()
+
+    def reconnect(self):
+        if self.hook != None: return
+        try:
+            self.show(text='Reconnecting...')
+            self.connect()
+        except:
+            cooldown = self.config('reconnect_cooldown', int)
+            self.show(text='Reconnect failed. Attempting again in {cooldown} seconds.')
+            w.hook_timer(cooldown, 1, 1, 'reconnect_cb', self.name)
 
     def delete(self):
         self.client.disconnect()
@@ -445,9 +472,10 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
 
 @lichat_command('disconnect', 'Disconnect from a lichat server. If no name is given, the server of the current channel is disconnected.')
 def disconnect_command_cb(buffer, server=None):
-    server = buffer.server
     if server != None:
         server = servers[server]
+    else:
+        server = buffer.server
     server.disconnect()
 
 @raw_command('help', 'Display help information about lichat commands.')
@@ -647,7 +675,6 @@ def server_info_command_cb(buffer, target):
 
 ## TODO: making edits
 ## TODO: autocompletion
-## TODO: properly handle disconnections initiated by the server.
 
 def read_file(data):
     data = json.loads(data)
@@ -861,7 +888,9 @@ if __name__ == '__main__' and import_ok:
             {'name': 'password', 'default': ''},
             {'name': 'channels', 'default': ''},
             {'name': 'connect', 'default': True},
-            {'name': 'ssl', 'default': False}
+            {'name': 'ssl', 'default': False},
+            {'name': 'reconnect', 'default': True},
+            {'name': 'reconnect_cooldown', 'default': 60}
         ])
         config_section(config_file, 'server', [
             {'name': 'tynet.host', 'default': 'chat.tymoon.eu'},
@@ -870,7 +899,9 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.password', 'default': ''},
             {'name': 'tynet.channels', 'default': 'lichatters'},
             {'name': 'tynet.connect', 'default': False},
-            {'name': 'tynet.ssl', 'default': False}
+            {'name': 'tynet.ssl', 'default': False},
+            {'name': 'tynet.reconnect', 'default': True},
+            {'name': 'tynet.reconnect_cooldown', 'default': 60}
         ])
         config_reload_cb('', config_file)
         
