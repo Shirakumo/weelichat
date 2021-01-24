@@ -87,6 +87,9 @@ def input_prompt_cb(data, item, current_window, w_buffer, extra_info):
     
     return f"{w.color(w.config_color(w.config_get('irc.color.input_nick')))}{buffer.server.client.username}"
 
+def format_alist(list, key_separator=': ', entry_separator='\n'):
+    return entry_separator.join([f"{x[0]}{key_separator}{x[1]}" for x in list])
+
 def edit_buffer(w_buffer, matcher, new_text):
     h_line = w.hdata_get('line')
     h_line_data = w.hdata_get('line_data')
@@ -159,7 +162,10 @@ class Buffer:
 
     def send_confirm(self, message, type, **args):
         def callback(_client, _previous, update):
-            self.show(update, text=message, kind='action')
+            if isinstance(update, Failure):
+                self.show(update, kind='error')
+            else:
+                self.show(update, text=message)
         self.send_cb(callback, type, **args)
 
     def send_cb(self, cb, type, **args):
@@ -170,7 +176,7 @@ class Buffer:
     def display(self):
         w.command(self.buffer, f"/buffer {self.w_name()}")
 
-    def show(self, update=None, text=None, kind='text', tags=[]):
+    def show(self, update=None, text=None, kind='action', tags=[]):
         time = 0
         if update == None:
             update = {'from': self.server.client.servername}
@@ -242,14 +248,14 @@ class Server:
             if isinstance(update, Failure):
                 self.show(update, kind='error')
 
-        def display(client, update):
-            self.show(update)
+        def show(client, update):
+            self.show(update, kind='text')
 
         def on_pause(client, update):
             if update.by == 0:
-                self.show(update, text=f"has disabled pause mode in {u.channel}", kind='action')
+                self.show(update, text=f"has disabled pause mode in {u.channel}")
             else:
-                self.show(update, text=f"has enabled pause mode by {u.by} in {u.channel}", kind='action')
+                self.show(update, text=f"has enabled pause mode by {u.by} in {u.channel}")
 
         def on_emote(client, update):
             self.client.emotes[update.name].offload(emote_dir)
@@ -259,24 +265,24 @@ class Server:
             data['server'] = name
             if imgur_client_id != '' and update['from'] != self.client.username and update['content-type'] in imgur_formats:
                 w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
-                self.show(update, text=f"Sent file {update['filename']} (Uploading...)", kind='action')
+                self.show(update, text=f"Sent file {update['filename']} (Uploading...)")
             elif data_save_directory != '' and (data_save_types == ['all'] or update['content-type'] in data_save_types):
                 data['url'] = f"{data_save_directory}/{time.strftime('%Y.%m.%d-%H-%M-%S')}-{data['filename']}"
                 w.hook_process('func:write_file', 0, 'process_upload', json.dumps(data))
-                self.show(update, text=f"Sent file {update['filename']} (Saving...)", kind='action')
+                self.show(update, text=f"Sent file {update['filename']} (Saving...)")
             else:
-                self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})", kind='action')
+                self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})")
 
         def on_channel_info(client, update):
             (_, name) = update.key
-            self.show(update, text=f"{name}: {text}", kind='action')
+            self.show(update, text=f"{name}: {text}")
 
         client.add_handler(Connect, on_connect)
         client.add_handler(Update, on_misc)
-        client.add_handler(Message, display)
-        client.add_handler(Join, display)
-        client.add_handler(Leave, display)
-        client.add_handler(Kick, display)
+        client.add_handler(Message, show)
+        client.add_handler(Join, show)
+        client.add_handler(Leave, show)
+        client.add_handler(Kick, show)
         client.add_handler(Pause, on_pause)
         client.add_handler(Emote, on_emote)
         client.add_handler(Data, on_data)
@@ -314,7 +320,7 @@ class Server:
     def send_cb(self, cb, type, **args):
         return self.client.send_callback(cb, type, **args)
 
-    def show(self, update, text=None, kind='text', buffer=None):
+    def show(self, update, text=None, kind='action', buffer=None):
         if buffer == None and isinstance(update, UpdateFailure):
             origin = self.client.origin(update)
             if origin != None and not isinstance(origin, Leave):
@@ -374,6 +380,17 @@ def lichat_command(name, description=''):
                 f(buffer, *args)
             return w.WEECHAT_RC_OK_EAT
         register_command(name, wrapper, description, cmdtype='lichat')
+        return wrapper
+    return nested
+
+def handle_failure(buffer):
+    def nested(f):
+        @wraps(f)
+        def wrapper(_client, _prev, update):
+            if isinstance(update, Failure):
+                buffer.show(update, kind='error')
+            else:
+                f(update)
         return wrapper
     return nested
 
@@ -437,7 +454,8 @@ def help_command_cb(w_buffer, topic=None):
 
 @lichat_command('join', 'Join an existing channel.')
 def join_command_cb(buffer, channel=None):
-    def join_cb(_client, _join, update):
+    @handle_failure(buffer)
+    def join_cb(update):
         if update.channel not in buffer.server.buffers:
             Buffer(buffer.server, update.channel)
         buffer.server.buffers[update.channel].display()
@@ -466,7 +484,8 @@ def kickban_command_cb(buffer, user, channel=None):
 
 @lichat_command('register', 'Register your account with a password. If successful, will save the password to config.')
 def register_command_cb(buffer, password):
-    def reg_cb(_client, _prev, update):
+    @handle_failure(buffer)
+    def reg_cb(update):
         if isinstance(update, Register):
             w.config_option_set(config['server'][buffer.server.name+'.password'], password, 0)
         buffer.show(update, text="Profile registered. Password has been saved.")
@@ -535,19 +554,22 @@ def message_command_cb(buffer, channel, *args):
 
 @lichat_command('users', 'List the users of the given channel. If no channel name is given, defaults to the current channel.')
 def users_command_cb(buffer, channel=None):
-    def callback(_client, _prev, users):
+    @handle_failure(buffer)
+    def callback(users):
         buffer.show(text=f"Currently in channel: {' '.join(users.users)}")
     buffer.send_cb(callback, Users, channel=channel)
 
 @lichat_command('channels', 'List the channels of the current server. If the server supports the channel-trees extension, only channels below the specified channel are retuurned. If no channel is specified, all top-level channels are returned.')
 def channels_command_cb(buffer, channel=''):
-    def callback(_client, _prev, channels):
+    @handle_failure(buffer)
+    def callback(channels):
         buffer.show(text=f"Channels: {' '.join(channels.channels)}")
     buffer.send_cb(callback, Channels, channel=channel)
 
 @lichat_command('user-info', 'Request information on the given user.')
 def user_info_command_cb(buffer, target):
-    def callback(_client, _prev, info):
+    @handle_failure(buffer)
+    def callback(info):
         registered = 'registered'
         if not info.registered:
             registered = 'not registered'
@@ -584,9 +606,29 @@ def send_command_cb(buffer, file, channel=None):
         w.hook_process('func:read_file', 0, 'process_send', json.dumps(data))
     else:
         w.hook_process('func:download_file', 0, 'process_send', json.dumps(data))
-    buffer.show(update, text=f"Sending file...", kind='action')
+    buffer.show(update, text=f"Sending file...")
 
-## TODO: capabilities and server-info
+@lichat_command('capabilities', 'Check what capabilities you have. If no channel name is given, defaults to the current channel.')
+def capabilities_command_cb(buffer, channel=None):
+    @handle_failure(buffer)
+    def callback(info):
+        buffer.show(text=f"You are permitted the following: {', '.join([x[1] for x in info.permitted])}")
+    buffer.send_cb(callback, Capabilities, channel=channel)
+
+@lichat_command('server-info', 'Check server information on a user.')
+def server_info_command_cb(buffer, target):
+    @handle_failure(buffer)
+    def callback(info):
+        attributes = format_alist(info.attributes, entry_separator='\n    ')
+        connections = '\n'.join([format_alist(x, entry_separator='\n    ') for x in info.connections])
+        buffer.show(text=f"""Server information on {target}:
+  Attributes:
+    {connections}
+  Connections:
+    {connections}
+""")
+    buffer.send_cb(callback, ServerInfo, target=target)
+
 ## TODO: making edits
 ## TODO: nicklist
 ## TODO: autocompletion
