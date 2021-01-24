@@ -28,6 +28,8 @@ try:
     import re
     import mimetypes
     import time
+    import pylichat
+    import inspect
     from pylichat import Client
     from pylichat.update import *
     from pylichat.symbol import kw, li
@@ -47,8 +49,8 @@ config = {}
 commands = {}
 servers = {}
 
-def register_command(name, func, description='', cmdtype='lichat'):
-    commands[name] = {'name': name, 'func': func, 'description': description, 'cmdtype': cmdtype}
+def register_command(name, func, description='', cmdtype='lichat', completion=''):
+    commands[name] = {'name': name, 'func': func, 'description': description, 'cmdtype': cmdtype, 'completion': completion}
 
 def call_command(buffer, name, *args):
     return commands[name]['func']('', buffer.buffer, shlex.join(args))
@@ -391,6 +393,7 @@ class Server:
                 buffer = Buffer(self, name)
         return buffer.show(update, text=text, kind=kind)
 
+### Commands
 def check_signature(f, args, command=None):
     sig = signature(f)
     try:
@@ -407,7 +410,7 @@ def check_signature(f, args, command=None):
                 w.prnt("", f"{w.prefix('error')}lichat: Too many arguments for command \"{command}\"")
         return False
 
-def raw_command(name, description=''):
+def raw_command(name, completion='', description=''):
     def nested(f):
         @wraps(f)
         def wrapper(_data, w_buffer, args_str):
@@ -418,11 +421,11 @@ def raw_command(name, description=''):
             else:
                 return w.WEECHAT_RC_ERROR
             return w.WEECHAT_RC_OK
-        register_command(name, wrapper, description, cmdtype='raw')
+        register_command(name, wrapper, description, cmdtype='raw', completion=completion)
         return wrapper
     return nested
 
-def lichat_command(name, description=''):
+def lichat_command(name, completion='', description=''):
     def nested(f):
         @wraps(f)
         def wrapper(_data, w_buffer, args_str):
@@ -434,7 +437,7 @@ def lichat_command(name, description=''):
             if check_signature(f, [buffer, *args], command=name):
                 f(buffer, *args)
             return w.WEECHAT_RC_OK_EAT
-        register_command(name, wrapper, description, cmdtype='lichat')
+        register_command(name, wrapper, description, cmdtype='lichat', completion=completion)
         return wrapper
     return nested
 
@@ -449,7 +452,24 @@ def handle_failure(buffer):
         return wrapper
     return nested
 
-@raw_command('connect', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
+def lichat_command_cb(data, w_buffer, args_str):
+    args = shlex.split(args_str)
+    if len(args) == 0:
+        return w.WEECHAT_RC_ERROR
+
+    name = args[0]
+    command = commands.get(name, None)
+    if command == None:
+        w.prnt(w_buffer, f"{w.prefix('error')}Error with command \"/lichat {args_str}\" (help on command: /help lichat)")
+        return w.WEECHAT_RC_ERROR
+
+    if command['cmdtype'] == 'lichat' and weechat_buffer_to_representation(w_buffer) is None:
+        w.prnt(w_buffer, f"{w.prefix('error')}lichat: command \"lichat {name}\" must be executed on lichat buffer (server, channel or private)")
+        return w.WEECHAT_RC_ERROR
+
+    return command['func'](data, w_buffer, shlex.join(args))
+
+@raw_command('connect', '%(lichat_server)', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
 def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None, password=None, ssl=None):
     if name == None:
         for server in servers:
@@ -482,7 +502,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
         servers[name].connect()
 
 
-@lichat_command('disconnect', 'Disconnect from a lichat server. If no name is given, the server of the current channel is disconnected.')
+@lichat_command('disconnect', '%(lichat_server) %-', 'Disconnect from a lichat server. If no name is given, the server of the current channel is disconnected.')
 def disconnect_command_cb(buffer, server=None):
     if server != None:
         server = servers[server]
@@ -490,7 +510,7 @@ def disconnect_command_cb(buffer, server=None):
         server = buffer.server
     server.disconnect()
 
-@raw_command('help', 'Display help information about lichat commands.')
+@raw_command('help', '%(lichat_command) %-', 'Display help information about lichat commands.')
 def help_command_cb(w_buffer, topic=None):
     if topic == None:
         for name in sorted(commands):
@@ -508,7 +528,7 @@ def help_command_cb(w_buffer, topic=None):
             w.prnt(w_buffer, f"/lichat {command['name']} {sig}")
             w.prnt(w_buffer, f"{command['description']}")
 
-@lichat_command('join', 'Join an existing channel.')
+@lichat_command('join', '%(lichat_channel) %-', 'Join an existing channel.')
 def join_command_cb(buffer, channel=None):
     @handle_failure(buffer)
     def join_cb(update):
@@ -517,28 +537,28 @@ def join_command_cb(buffer, channel=None):
         buffer.server.buffers[update.channel].display()
     buffer.send_cb(join_cb, Join, channel=channel)
 
-@lichat_command('leave', 'Leave a channel you\'re in. Defaults to the current channel.')
+@lichat_command('leave', '%(lichat_channel) %-', 'Leave a channel you\'re in. Defaults to the current channel.')
 def leave_command_cb(buffer, channel=None):
     buffer.send(Leave, channel=channel)
 
-@lichat_command('create', 'Create a new channel. If no name is given, an anonymous channel is created.')
+@lichat_command('create', '', 'Create a new channel. If no name is given, an anonymous channel is created.')
 def create_command_cb(buffer, channel=''):
     buffer.send(Create, channel=channel)
 
-@lichat_command('pull', 'Pull another user into a channel. If no channel name is given, defaults to the current channel.')
+@lichat_command('pull', '%(nicks) %(lichat_channel) %-', 'Pull another user into a channel. If no channel name is given, defaults to the current channel.')
 def pull_command_cb(buffer, user, channel=None):
     buffer.send(Pull, channel=channel, target=user)
 
-@lichat_command('kick', 'Kicks another user from a channel. If no channel name is given, defaults to the current channel.')
+@lichat_command('kick', '%(nicks) %(lichat_channel) %-', 'Kicks another user from a channel. If no channel name is given, defaults to the current channel.')
 def kick_command_cb(buffer, user, channel=None):
     buffer.send(Kick, channel=channel, target=user)
 
-@lichat_command('kickban', 'Kicks another user from a channel and removes their join permission. If no channel name is given, defaults to the current channel.')
+@lichat_command('kickban', '%(nicks) %(lichat_channel) %-', 'Kicks another user from a channel and removes their join permission. If no channel name is given, defaults to the current channel.')
 def kickban_command_cb(buffer, user, channel=None):
     call_command(buffer, 'deny', 'join', user, channel)
     call_command(buffer, 'kick', user, channel)
 
-@lichat_command('register', 'Register your account with a password. If successful, will save the password to config.')
+@lichat_command('register', '', 'Register your account with a password. If successful, will save the password to config.')
 def register_command_cb(buffer, password):
     @handle_failure(buffer)
     def reg_cb(update):
@@ -547,20 +567,19 @@ def register_command_cb(buffer, password):
         buffer.show(update, text="Profile registered. Password has been saved.")
     buffer.send_cb(reg_cb, Register, password=password)
 
-@lichat_command('set-channel-info', """Set channel information. If no channel name is given, defaults to the current channel.
+@lichat_command('set-channel-info', '%(lichat_channel_key) %-', """Set channel information in the current channel.
 The key must be a lichat symbol. By default the following symbols are recognised:
   :news
   :topic
   :rules
   :contact
 However, a server may support additional symbols.""")
-def set_channel_info_command_cb(buffer, key, value, channel=None):
-    buffer.send(SetChannelInfo, channel=channel, key=wire.from_string(key), text=value)
+def set_channel_info_command_cb(buffer, key, *value):
+    buffer.send(SetChannelInfo, key=wire.from_string(key), text=' '.join(value))
 
-@lichat_command('channel-info', 'Retrieve channel information. If no channel name is given, defaults to the current channel. If no key is given, all channel info is requested.')
-def channel_info_command_cb(buffer, key=True, channel=None):
-    if key != True:
-        key = wire.from_string(key)
+@lichat_command('channel-info', '%(lichat_channel_key)|T %(lichat_channel) %-', 'Retrieve channel information. If no channel name is given, defaults to the current channel. If no key is given, all channel info is requested.')
+def channel_info_command_cb(buffer, key='T', channel=None):
+    key = wire.from_string(key)
     buffer.send(ChannelInfo, channel=channel, key=key)
 
 @lichat_command('topic', 'View or set the topic of the current channel.')
@@ -570,69 +589,69 @@ def topic_command_cb(buffer, value=None):
     else:
         buffer.send(SetChannelInfo, key=kw('topic'), text=value)
 
-@lichat_command('pause', 'Set the pause mode of the channel. If no channel name is given, defaults to the current channel. If no pause time is given, pause-mode is ended.')
+@lichat_command('pause', '0 %(lichat_channel) %-', 'Set the pause mode of the channel. If no channel name is given, defaults to the current channel. If no pause time is given, pause-mode is ended.')
 def pause_command_cb(buffer, pause="0", channel=None):
     buffer.send(Pause, channel=channel, by=int(pause))
 
-@lichat_command('quiet', 'Quiets the given user. If no channel name is given, defaults to the current channel.')
+@lichat_command('quiet', '%(nicks) %(lichat_channel) %-', 'Quiets the given user. If no channel name is given, defaults to the current channel.')
 def quiet_command_cb(buffer, target, channel=None):
     buffer.send_confirm(f"The user {target} has been quieted. Their messages will no longer be visible.",
                         Quiet, channel=channel, target=target)
 
-@lichat_command('unquiet', 'Unquiets the given user. If no channel name is given, defaults to the current channel.')
+@lichat_command('unquiet', '%(nicks) %(lichat_channel) %-', 'Unquiets the given user. If no channel name is given, defaults to the current channel.')
 def unquiet_command_cb(buffer, target, channel=None):
     buffer.send_confirm(f"The user {target} has been allowed messaging again.",
                         Unquiet, channel=channel, target=target)
 
-@lichat_command('kill', 'Kills the connections of a user.')
+@lichat_command('kill', '%(nicks) %-', 'Kills the connections of a user.')
 def kill_command_cb(buffer, target):
     buffer.send_confirm(f"The user {target} has been killed.",
                         Kill, target=target)
 
-@lichat_command('destroy', 'Destroys a channel immediately.  If no channel name is given, defaults to the current channel.')
+@lichat_command('destroy', '%(lichat_channel) %-', 'Destroys a channel immediately.  If no channel name is given, defaults to the current channel.')
 def destroy_command_cb(buffer, channel=None):
     buffer.send_confirm(f"The user {target} has been killed.",
                         Destroy, channel=channel)
 
-@lichat_command('ban', 'Bans the given user from the server by username.')
+@lichat_command('ban', '%(nicks) %-', 'Bans the given user from the server by username.')
 def ban_command_cb(buffer, target):
     buffer.send_confirm(f"The user {target} has been banned.",
                         Ban, target=target)
 
-@lichat_command('unban', 'Unbans the given username from the server.')
+@lichat_command('unban', '%(nicks) %-', 'Unbans the given username from the server.')
 def unban_command_cb(buffer, target):
     buffer.send_confirm(f"The user {target} has been unbanned.",
                         Unban, target=target)
 
-@lichat_command('ip-ban', 'Bans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
+@lichat_command('ip-ban', '', 'Bans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
 def ip_ban_command_cb(buffer, ip, mask='::'):
     buffer.send_confirm(f"The ip {ip} under {mask} has been banned.",
                         IpBan, ip=ip, mask=mask)
 
-@lichat_command('ip-unban', 'Unbans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
+@lichat_command('ip-unban', '', 'Unbans the given IP address from the server. Set bits in the given mask will be ignored when comparing IPs.')
 def ip_unban_command_cb(buffer, ip, mask='::'):
     buffer.send_confirm(f"The ip {ip} under {mask} has been unbanned.",
                         IpUnban, ip=ip, mask=mask)
 
-@lichat_command('message', 'Send a message to the given channel.')
+@lichat_command('message', '%(lichat_channel) %-', 'Send a message to the given channel.')
 def message_command_cb(buffer, channel, *args):
     buffer.send(Message, channel=channel, message=' '.join(args))
 
-@lichat_command('users', 'List the users of the given channel. If no channel name is given, defaults to the current channel.')
+@lichat_command('users', '%(lichat_channel) %-', 'List the users of the given channel. If no channel name is given, defaults to the current channel.')
 def users_command_cb(buffer, channel=None):
     @handle_failure(buffer)
     def callback(users):
         buffer.show(text=f"Currently in channel: {' '.join(users.users)}")
     buffer.send_cb(callback, Users, channel=channel)
 
-@lichat_command('channels', 'List the channels of the current server. If the server supports the channel-trees extension, only channels below the specified channel are retuurned. If no channel is specified, all top-level channels are returned.')
+@lichat_command('channels', '%(lichat_channel) %-', 'List the channels of the current server. If the server supports the channel-trees extension, only channels below the specified channel are retuurned. If no channel is specified, all top-level channels are returned.')
 def channels_command_cb(buffer, channel=''):
     @handle_failure(buffer)
     def callback(channels):
         buffer.show(text=f"Channels: {' '.join(channels.channels)}")
     buffer.send_cb(callback, Channels, channel=channel)
 
-@lichat_command('user-info', 'Request information on the given user.')
+@lichat_command('user-info', '%(nicks) %-', 'Request information on the given user.')
 def user_info_command_cb(buffer, target):
     @handle_failure(buffer)
     def callback(info):
@@ -642,7 +661,7 @@ def user_info_command_cb(buffer, target):
         buffer.show(text=f"Info on {target}: {target.connections} connections, {registered}")
     buffer.send_cb(callback, UserInfo, target=target)
 
-@lichat_command('grant', 'Grant permission for an update to a user. If no user is given, the permission is granted to everyone. If no channel name is given, defaults to the current channel.')
+@lichat_command('grant', '%(lichat_update) %(nicks) %(lichat_channel) %-', 'Grant permission for an update to a user. If no user is given, the permission is granted to everyone. If no channel name is given, defaults to the current channel.')
 def grant_command_cb(buffer, update, target=None, channel=None):
     type = li(update)
     if target == None:
@@ -652,7 +671,7 @@ def grant_command_cb(buffer, update, target=None, channel=None):
         buffer.send_confirm(f"{target} has been allowed {update}ing",
                             Grant, channel=channel, target=target, update=type)
 
-@lichat_command('deny', 'Deny permission for an update from a user. If no user is given, the permission is denied to everyone but you. If no channel name is given, defaults to the current channel.')
+@lichat_command('deny', '%(lichat_update) %(nicks) %(lichat_channel) %-', 'Deny permission for an update from a user. If no user is given, the permission is denied to everyone but you. If no channel name is given, defaults to the current channel.')
 def deny_command_cb(buffer, update, target=None, channel=None):
     type = li(update)
     if target == None:
@@ -662,7 +681,7 @@ def deny_command_cb(buffer, update, target=None, channel=None):
         buffer.send_confrm(f"{target} has been denied from {update}ing",
                            Deny, channel=channel, target=target, update=type)
 
-@lichat_command('send', 'Send a local file or file from an URL as a data upload. If no channel name is given, defaults to the current channel.')
+@lichat_command('send', '%(filename) %(lichat_channel) %-', 'Send a local file or file from an URL as a data upload. If no channel name is given, defaults to the current channel.')
 def send_command_cb(buffer, file, channel=None):
     update = buffer.make_instance(Data, channel=channel)
     data = update.__dict__
@@ -674,14 +693,14 @@ def send_command_cb(buffer, file, channel=None):
         w.hook_process('func:download_file', 0, 'process_send', json.dumps(data))
     buffer.show(update, text=f"Sending file...")
 
-@lichat_command('capabilities', 'Check what capabilities you have. If no channel name is given, defaults to the current channel.')
+@lichat_command('capabilities', '%(lichat_channel) %-', 'Check what capabilities you have. If no channel name is given, defaults to the current channel.')
 def capabilities_command_cb(buffer, channel=None):
     @handle_failure(buffer)
     def callback(info):
         buffer.show(text=f"You are permitted the following: {', '.join([x[1] for x in info.permitted])}")
     buffer.send_cb(callback, Capabilities, channel=channel)
 
-@lichat_command('server-info', 'Check server information on a user.')
+@lichat_command('server-info', '%(nicks) %-', 'Check server information on a user.')
 def server_info_command_cb(buffer, target):
     @handle_failure(buffer)
     def callback(info):
@@ -695,7 +714,7 @@ def server_info_command_cb(buffer, target):
 """)
     buffer.send_cb(callback, ServerInfo, target=target)
 
-@lichat_command('edit', 'Edit a previous message.')
+@lichat_command('edit', '1', 'Edit a previous message.')
 def edit_command_cb(buffer, line=None, *text):
     if line == None:
         pass # TODO: interactive edit selection
@@ -730,7 +749,7 @@ def edit_command_cb(buffer, line=None, *text):
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages from you. Don't know how to access message {line-1}.", kind='error')
 
-@lichat_command('query', 'Join a private channel with a number of other users.')
+@lichat_command('query', '%(nicks) %*', 'Join a private channel with a number of other users.')
 def query_command_cb(buffer, *targets):
     @handle_failure(buffer)
     def callback(join):
@@ -738,13 +757,11 @@ def query_command_cb(buffer, *targets):
             buffer.send(Pull, channel=join.channel, target=target)
     buffer.server.send_cb(callback, Create)
 
-@lichat_command('me', 'Send a message in third-person.')
+@lichat_command('me', '', 'Send a message in third-person.')
 def me_command_cb(buffer, *text):
     buffer.send(Message, text=f"*{' '.join(text)}*")
 
-## TODO: autocompletion
-## TODO: when server disconnects, we fail to notice.
-
+### Async
 def read_file(data):
     data = json.loads(data)
     try:
@@ -840,23 +857,40 @@ def process_upload(_data, _command, return_code, out, err):
             buffer.edit(update)
     return w.WEECHAT_RC_OK
 
-def lichat_cb(data, w_buffer, args_str):
-    args = shlex.split(args_str)
-    if len(args) == 0:
-        return w.WEECHAT_RC_ERROR
+### Completion
+def channel_completion_cb(_data, item, w_buffer, completion):
+    buffer = weechat_buffer_to_representation(w_buffer)
+    if buffer == None: return w.WEECHAT_RC_OK
 
-    name = args[0]
-    command = commands.get(name, None)
-    if command == None:
-        w.prnt(w_buffer, f"{w.prefix('error')}Error with command \"/lichat {args_str}\" (help on command: /help lichat)")
-        return w.WEECHAT_RC_ERROR
+    for channel in buffer.server.buffers:
+        w.hook_completion_list_add(completion, channel, 0, w.WEECHAT_LIST_POS_SORT)
+    return w.WEECHAT_RC_OK
 
-    if command['cmdtype'] == 'lichat' and weechat_buffer_to_representation(w_buffer) is None:
-        w.prnt(w_buffer, f"{w.prefix('error')}lichat: command \"lichat {name}\" must be executed on lichat buffer (server, channel or private)")
-        return w.WEECHAT_RC_ERROR
+def server_completion_cb(_data, item, w_buffer, completion):
+    for server in servers:
+        w.hook_completion_list_add(completion, server, 0, w.WEECHAT_LIST_POS_SORT)
+    return w.WEECHAT_RC_OK
 
-    return command['func'](data, w_buffer, shlex.join(args))
+def update_completion_cb(_data, item, w_buffer, completion):
+    for name, obj in inspect.getmembers(pylichat.update):
+        if hasattr(obj, '__symbol__'):
+            w.hook_completion_list_add(completion, obj.__symbol__[1], 0, w.WEECHAT_LIST_POS_SORT)
+    return w.WEECHAT_RC_OK
 
+def channel_key_completion_cb(_data, item, w_buffer, completion):
+    for k in [':topic',':rules',':news',':contact']:
+        w.hook_completion_list_add(completion, k, 0, w.WEECHAT_LIST_POS_SORT)
+    return w.WEECHAT_RC_OK
+
+def emote_completion_cb(_data, item, w_buffer, completion):
+    buffer = weechat_buffer_to_representation(w_buffer)
+    if buffer == None: return w.WEECHAT_RC_OK
+    
+    for emote in buffer.server.client.emotes:
+        w.hook_completion_list_add(completion, ':'+emote+':', 0, w.WEECHAT_LIST_POS_SORT)
+    return w.WEECHAT_RC_OK
+
+### Config
 def cfg(section, option, type=str):
     cfg = config[section][option]
     if type == str: return w.config_string(cfg)
@@ -940,6 +974,7 @@ def config_section(file, section_name, options):
                                                          '', '', '', '', '', '')
     return section
 
+### Setup
 if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
                         SCRIPT_LICENSE, SCRIPT_DESC, '', ''):
@@ -974,12 +1009,11 @@ if __name__ == '__main__' and import_ok:
         ])
         config_reload_cb('', config_file)
         
-        w.hook_command('lichat',                   # command
-                       'lichat description',       # description
-                       'args',                     # args
-                       'args_description',         # args_description
-                       '',                         # completion
-                       'lichat_cb', '')
+        w.hook_command('lichat', 'Prefix for lichat related commands',
+                       '<command> [<command options>]',
+                       'Commands:\n  '+'\n  '.join(commands.keys())+'\nUse /lichat help for more information.',
+                       ' || '.join([c['name']+' '+c['completion'] for c in commands.values() if c['completion'] != '']),
+                       'lichat_command_cb', '')
         w.hook_command_run('/ban', 'ban_command_cb', '')
         w.hook_command_run('/disconnect', 'disconnect_command_cb', '')
         w.hook_command_run('/invite', 'pull_command_cb', '')
@@ -998,5 +1032,14 @@ if __name__ == '__main__' and import_ok:
         w.hook_command_run('/whois', 'user_info_command_cb', '')
 
         w.bar_item_new('input_prompt', '(extra)input_prompt_cb', '')
+
+        w.hook_completion('lichat_channel', 'complete Lichat channel names', 'channel_completion_cb', '')
+        w.hook_completion('lichat_server', 'complete Lichat server names', 'server_completion_cb', '')
+        w.hook_completion('lichat_update', 'complete Lichat update types', 'update_completion_cb', '')
+        w.hook_completion('lichat_channel_key', 'complete Lichat channel info keys', 'channel_key_completion_cb', '')
+        w.hook_completion('lichat_emote', 'complete :emotes: for Lichat', 'emote_completion_cb', '')
         
         w.prnt("", "lichat.py\tis loaded ok")
+
+## TODO: autocompletion
+## TODO: when server disconnects, we fail to notice.
