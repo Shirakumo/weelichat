@@ -145,13 +145,29 @@ class Buffer:
         self.buffer = w.buffer_new(self.w_name(),
                                    'lichat_buffer_input_cb', '',
                                    'lichat_buffer_close_cb', '')
-        self.nicklist = w.nicklist_add_group(self.buffer, '', 'Users', 'weechat.color.nicklist_group', 1)
         w.buffer_set(self.buffer, 'nicklist', '1')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_lichat_channel', channel)
         w.buffer_set(self.buffer, 'localvar_set_lichat_complete_index', '0')
         w.buffer_set(self.buffer, 'localvar_set_lichat_complete_prefix', '')
         server.buffers[channel] = self
+
+    def disconnect(self, show=True):
+        if show:
+            self.show(text='Disconnected.', kind='network')
+        w.nicklist_remove_all(self.buffer)
+        self.nicklist = None
+
+    def join(self, user):
+        if self.nicklist == None:
+            self.nicklist = w.nicklist_add_group(self.buffer, '', 'Users', 'weechat.color.nicklist_group', 1)
+        w.nicklist_add_nick(self.buffer, self.nicklist, user, 'bar_fg', '', 'bar_fg', 1)
+
+    def leave(self, user):
+        if self.nicklist != None:
+            nick = w.nicklist_search_nick(self.buffer, '', user)
+            if nick != None:
+                w.nicklist_remove_nick(self.buffer, nick)
 
     def w_name(self):
         return f"lichat.{self.server.name}.{self.name}"
@@ -267,9 +283,7 @@ class Server:
 
         def on_disconnect(client, update):
             for channel in self.buffers:
-                buffer = self.buffers[channel]
-                buffer.show(update, text='Disconnected.', kind='network')
-                w.nicklist_remove_all(buffer.buffer)
+                self.buffers[channel].disconnect()
             if self.hook != None:
                 w.unhook(self.hook)
                 self.hook = None
@@ -311,15 +325,14 @@ class Server:
 
         def on_join(client, update):
             buffer = self.show(update)
-            w.nicklist_add_nick(buffer.buffer, buffer.nicklist, update['from'], 'bar_fg', '', 'bar_fg', 1)
+            buffer.join(update['from'])
 
         def on_leave(client, update):
             buffer = self.show(update)
             if update['from'] == self.client.username:
-                w.nicklist_remove_all(buffer.buffer)
+                buffer.disconnect(False)
             else:
-                nick = w.nicklist_search_nick(buffer.buffer, '', update['from'])
-                w.nicklist_remove_nick(buffer.buffer, nick)
+                buffer.leave(update['from'])
 
         def on_edit(client, update):
             self.buffers[update.channel].edit(update);
