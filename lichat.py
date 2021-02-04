@@ -153,6 +153,13 @@ class Buffer:
         w.buffer_set(self.buffer, 'notify', '1')
         w.buffer_set(self.buffer, 'filter', '1')
         w.buffer_set(self.buffer, 'input_multiline', '1')
+        w.buffer_set(self.buffer, 'localvar_set_server', server.name)
+        w.buffer_set(self.buffer, 'localvar_set_channel', channel)
+        w.buffer_set(self.buffer, 'localvar_set_nick', server.client.username)
+        if server.client.servername == channel:
+            w.buffer_set(self.buffer, 'localvar_set_type', 'server')
+        else:
+            w.buffer_set(self.buffer, 'localvar_set_type', 'channel')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_lichat_channel', channel)
         w.buffer_set(self.buffer, 'localvar_set_lichat_complete_index', '0')
