@@ -1121,3 +1121,4 @@ if __name__ == '__main__' and import_ok:
         w.prnt("", "lichat.py\tis loaded ok")
 
 ## TODO: when server disconnects, we fail to notice.
+## TODO: buffer sending to avoid getting throttled by the server.
