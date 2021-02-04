@@ -209,7 +209,7 @@ class Buffer:
         return self.server.send_cb(cb, type, **args)
 
     def display(self):
-        w.command(self.buffer, f"/buffer {self.w_name()}")
+        w.buffer_set(self.buffer 'display', '1')
 
     def show(self, update=None, text=None, kind='action', tags=[]):
         time = 0
@@ -962,8 +962,7 @@ def input_complete_cb(_data, w_buffer, command):
                 index = (index-1) % len(matches)
             w.buffer_set(w_buffer, 'localvar_set_lichat_complete_index', str(index))
             w.buffer_set(w_buffer, 'localvar_set_lichat_complete_prefix', prefix)
-            w.command(w_buffer, f"/input delete_line")
-            w.command(w_buffer, f"/input insert {prefix[:last_colon]}{match}:")
+            w.buffer_set(w_buffer, 'input', f"{prefix[:last_colon]}{match}:")
     except:
         pass
     return w.WEECHAT_RC_OK
