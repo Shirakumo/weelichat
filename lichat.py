@@ -328,7 +328,9 @@ class Server:
 
         def on_channel_info(client, update):
             (_, name) = update.key
-            self.show(update, text=f"{name}: {text}")
+            buffer = self.show(update, text=f"{name}: {update.text}")
+            if name == 'topic':
+                w.buffer_set(buffer.buffer, 'title', update.text)
 
         def on_join(client, update):
             buffer = self.show(update)
