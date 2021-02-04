@@ -30,7 +30,7 @@ try:
     import time
     import pylichat
     import inspect
-    from pylichat import Client
+    from pylichat import Client, ConnectionFailed
     from pylichat.update import *
     from pylichat.symbol import kw, li
     import pylichat.wire
@@ -473,10 +473,27 @@ def lichat_command_cb(data, w_buffer, args_str):
 
 @raw_command('connect', '%(lichat_server)', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
 def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None, password=None, ssl=None):
+    def try_connect(server):
+        try:
+            server.connect()
+        except ConnectionFailed as e:
+            if isinstance(e.update, InvalidPassword):
+                w.prnt(w_buffer, f"[{server.name}] The password is invalid!")
+            elif isinstance(e.update, NoSuchProfile):
+                w.prnt(w_buffer, f"[{server.name}] The given username is not registered and does not require a password!")
+            elif isinstance(e.update, TooManyConnections):
+                w.prnt(w_buffer, f"[{server.name}] The server has too many connections and refused yours.")
+            elif isinstance(e.update, TextUpdate):
+                w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e.update.text}")
+            else:
+                w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e}")
+        except Exception as e:
+            w.prnt(w_buffer, f"[{server.name}] Unexpected failure: {e}")
+    
     if name == None:
         for server in servers:
             if not servers[server].is_connected():
-                servers[server].connect()
+                try_connect(servers[server])
     elif host != None:
         if name in servers:
             w.prnt(w_buffer, f"f{w.prefix('error')} A server of that name already exists.")
@@ -488,7 +505,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
         if ssl == None: ssl = cfg('server_default', 'ssl', bool)
         if ssl == 'on': ssl = True
         if ssl == 'off': ssl = False
-        Server(name=name, username=username, password=password, host=host, port=port, ssl=ssl).connect()
+        try_connect(Server(name=name, username=username, password=password, host=host, port=port, ssl=ssl))
         config_section(config_file, 'server', [
             {'name': 'host', 'default': host},
             {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
@@ -501,7 +518,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
     elif name not in servers:
         w.prnt(w_buffer, f"f{w.prefix('error')} No such server {name}")
     else:
-        servers[name].connect()
+        try_connect(servers[name])
 
 
 @lichat_command('disconnect', '%(lichat_server) %-', 'Disconnect from a lichat server. If no name is given, the server of the current channel is disconnected.')
