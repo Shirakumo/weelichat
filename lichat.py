@@ -146,6 +146,13 @@ class Buffer:
                                    'lichat_buffer_input_cb', '',
                                    'lichat_buffer_close_cb', '')
         w.buffer_set(self.buffer, 'nicklist', '1')
+        w.buffer_set(self.buffer, 'nicklist_case_sensitive', '0')
+        w.buffer_set(self.buffer, 'nicklist_display_groups', '0')
+        w.buffer_set(self.buffer, 'short_name', name)
+        w.buffer_set(self.buffer, 'type', 'formatted')
+        w.buffer_set(self.buffer, 'notify', '1')
+        w.buffer_set(self.buffer, 'filter', '1')
+        w.buffer_set(self.buffer, 'input_multiline', '1')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_lichat_channel', channel)
         w.buffer_set(self.buffer, 'localvar_set_lichat_complete_index', '0')
@@ -209,7 +216,7 @@ class Buffer:
         return self.server.send_cb(cb, type, **args)
 
     def display(self):
-        w.buffer_set(self.buffer 'display', '1')
+        w.buffer_set(self.buffer, 'display', '1')
 
     def show(self, update=None, text=None, kind='action', tags=[]):
         time = 0
