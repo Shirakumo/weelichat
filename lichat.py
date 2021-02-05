@@ -635,14 +635,14 @@ def channel_info_command_cb(buffer, key='T', channel=None):
     buffer.send(ChannelInfo, channel=channel, key=key)
 
 @lichat_command('topic', 'View or set the topic of the current channel.')
-def topic_command_cb(buffer, value=None):
-    if value == None:
+def topic_command_cb(buffer, *topic):
+    if len(topic) == 0:
         topic = buffer.info(kw('topic'))
         if topic == None:
             topic = "No topic set."
         buffer.show(text=topic)
     else:
-        buffer.send(SetChannelInfo, key=kw('topic'), text=value)
+        buffer.send(SetChannelInfo, key=kw('topic'), text=' '.join(topic))
 
 @lichat_command('pause', '0 %(lichat_channel) %-', 'Set the pause mode of the channel. If no channel name is given, defaults to the current channel. If no pause time is given, pause-mode is ended.')
 def pause_command_cb(buffer, pause="0", channel=None):
