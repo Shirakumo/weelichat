@@ -246,8 +246,10 @@ class Buffer:
             elif isinstance(update, Kick):
                 kind = 'quit'
                 text = f"has kicked {update.target} from {update.channel}"
-            else:
+            elif isinstance(update, Update):
                 text = update.get('text', f"Update of type {type(update).__name__}")
+            else:
+                text = f"BUG: Supposed to show non-update {update}"
         tags = ','.join(tags)
         if kind == 'text':
             w.prnt_date_tags(self.buffer, time, tags, f"{update['from']}\t{text}")
@@ -342,6 +344,8 @@ class Server:
         def on_join(client, update):
             buffer = self.show(update)
             buffer.join(update['from'])
+            if update.channel == self.client.servername:
+                buffer.show(text=f"Supported extensions: {', '.join(self.client.extensions)}")
 
         def on_leave(client, update):
             buffer = self.show(update)
@@ -633,7 +637,10 @@ def channel_info_command_cb(buffer, key='T', channel=None):
 @lichat_command('topic', 'View or set the topic of the current channel.')
 def topic_command_cb(buffer, value=None):
     if value == None:
-        buffer.show(text=buffer.info(kw('topic')))
+        topic = buffer.info(kw('topic'))
+        if topic == None:
+            topic = "No topic set."
+        buffer.show(text=topic)
     else:
         buffer.send(SetChannelInfo, key=kw('topic'), text=value)
 
@@ -1137,3 +1144,4 @@ if __name__ == '__main__' and import_ok:
 
 ## TODO: when server disconnects, we fail to notice.
 ## TODO: buffer sending to avoid getting throttled by the server.
+## TODO: lag estimation
