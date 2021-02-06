@@ -94,6 +94,13 @@ def reconnect_cb(data, _remaining):
     if server != None:
         server.reconnect()
 
+def timeout_cb(data, _remaining):
+    server = servers.get(data, None)
+    if server != None:
+        server.show(text="Timed out, reconnecting...")
+        server.disconnect()
+        server.reconnect()
+
 def format_alist(list, key_separator=': ', entry_separator='\n'):
     return entry_separator.join([f"{x[0]}{key_separator}{x[1]}" for x in list])
 
@@ -280,6 +287,7 @@ class Server:
     client = None
     buffers = {}
     hook = None
+    timeout = None
 
     def __init__(self, name=None, username=None, password=None, host='chat.tymoon.eu', port=1111, ssl=False):
         client = Client(username, password)
@@ -294,7 +302,7 @@ class Server:
         client.reload_emotes(emote_dir)
 
         def on_connect(client, update):
-            for channel in self.config('channels').split('  '):
+            for channel in self.config('channels', str, '').split('  '):
                 self.send(Join, channel=channel)
 
         def on_disconnect(client, update):
@@ -307,6 +315,9 @@ class Server:
                     self.reconnect()
         
         def on_misc(client, update):
+            if self.timeout != None: w.unhook(self.timeout)
+            self.timeout = w.hook_timer(1000*60, 1, 1, 'timeout_cb', self.name)
+            
             if isinstance(update, Failure):
                 self.show(update, kind='error')
 
@@ -371,8 +382,8 @@ class Server:
         client.add_handler(SetChannelInfo, on_channel_info)
         servers[name] = self
 
-    def config(self, key, type=str):
-        return cfg('server', self.name+'.'+key, type)
+    def config(self, key, type=str, default=None):
+        return cfg('server', self.name+'.'+key, type, default)
 
     def is_supported(self, extension):
         return self.client.is_supported(extension)
@@ -386,6 +397,9 @@ class Server:
             self.hook = w.hook_fd(self.client.socket.fileno(), 1, 0, 1, 'lichat_socket_cb', self.name)
 
     def disconnect(self):
+        if self.timeout != None:
+            w.unhook(self.timeout)
+            self.timeout = None
         if self.hook != None:
             w.unhook(self.hook)
             self.hook = None
@@ -991,8 +1005,9 @@ def input_complete_cb(_data, w_buffer, command):
     return w.WEECHAT_RC_OK
 
 ### Config
-def cfg(section, option, type=str):
-    cfg = config[section][option]
+def cfg(section, option, type=str, default=None):
+    cfg = config[section].get(option, None)
+    if cfg == None: return default
     if type == str: return w.config_string(cfg)
     elif type == bool: return w.config_boolean(cfg)
     elif type == int: return w.config_integer(cfg)
