@@ -849,7 +849,10 @@ The key must be a lichat symbol. By default the following symbols are recognised
   :status (away, or something else)
 However, a server may support additional symbols.""")
 def set_user_info_command_cb(buffer, key, *value):
-    buffer.send(SetUserInfo, key=wire.from_string(key), text=' '.join(value))
+    @handle_failure(buffer)
+    def callback(update):
+        buffer.show(text=f"Field {key} updated.")
+    buffer.send_cb(callback, SetUserInfo, key=wire.from_string(key), text=' '.join(value))
 
 @lichat_command('away', 'on', """Set yourself as away (or present if no argument)""")
 def away_command_cb(buffer, value=None):
@@ -857,6 +860,10 @@ def away_command_cb(buffer, value=None):
         buffer.send(SetUserInfo, key=kw('status'), text='')
     else:
         buffer.send(SetUserInfo, key=kw('status'), text='away')
+
+@lichat_command('status', '', """Update your status""")
+def status_command_cb(buffer, *text):
+    buffer.send(SetUserInfo, key=kw('status'), text=' '.join(text))
 
 ### Async
 def read_file(data):
