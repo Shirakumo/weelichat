@@ -733,6 +733,10 @@ def user_info_command_cb(buffer, target):
         if not info.registered:
             registered = 'not registered'
         buffer.show(text=f"Info on {target}: {target.connections} connections, {registered}")
+        if info.info != None:
+            for entry in info.info:
+                if entry[0] != ('keyword', 'icon'):
+                    buffer.show(text=f"  {entry[0][1]}: entry[1]")
     buffer.send_cb(callback, UserInfo, target=target)
 
 @lichat_command('grant', '%(lichat_update) %(nicks) %(lichat_channel) %-', 'Grant permission for an update to a user. If no user is given, the permission is granted to everyone. If no channel name is given, defaults to the current channel.')
@@ -834,6 +838,25 @@ def query_command_cb(buffer, *targets):
 @lichat_command('me', '', 'Send a message in third-person.')
 def me_command_cb(buffer, *text):
     buffer.send(Message, text=f"*{' '.join(text)}*")
+
+@lichat_command('set-user-info', '%(lichat_user_key) %-', """Set user information for yourself.
+The key must be a lichat symbol. By default the following symbols are recognised:
+  :birthday
+  :contact
+  :location
+  :public-key
+  :real-name
+  :status (away, or something else)
+However, a server may support additional symbols.""")
+def set_user_info_command_cb(buffer, key, *value):
+    buffer.send(SetUserInfo, key=wire.from_string(key), text=' '.join(value))
+
+@lichat_command('away', 'on', """Set yourself as away (or present if no argument)""")
+def away_command_cb(buffer, value=None):
+    if value == None:
+        buffer.send(SetUserInfo, key=kw('status'), text='')
+    else:
+        buffer.send(SetUserInfo, key=kw('status'), text='away')
 
 ### Async
 def read_file(data):
