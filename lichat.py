@@ -93,6 +93,7 @@ def reconnect_cb(data, _remaining):
     server = servers.get(data, None)
     if server != None:
         server.reconnect()
+    return w.WEECHAT_RC_OK
 
 def timeout_cb(data, _remaining):
     server = servers.get(data, None)
@@ -100,6 +101,7 @@ def timeout_cb(data, _remaining):
         server.show(text="Timed out, reconnecting...")
         server.disconnect()
         server.reconnect()
+    return w.WEECHAT_RC_OK
 
 def format_alist(list, key_separator=': ', entry_separator='\n'):
     return entry_separator.join([f"{x[0]}{key_separator}{x[1]}" for x in list])
@@ -426,12 +428,12 @@ class Server:
     def send_cb(self, cb, type, **args):
         return self.client.send_callback(cb, type, **args)
 
-    def show(self, update, text=None, kind='action', buffer=None):
+    def show(self, update=None, text=None, kind='action', buffer=None):
         if buffer == None and isinstance(update, UpdateFailure):
             origin = self.client.origin(update)
             if origin != None and not isinstance(origin, Leave):
                 buffer = origin.get('channel', None)
-        if buffer == None:
+        if buffer == None and update != None:
             buffer = update.get('channel', None)
         if buffer == None:
             buffer = self.client.servername
@@ -440,7 +442,7 @@ class Server:
             buffer = self.buffers.get(name, None)
             if buffer == None:
                 buffer = Buffer(self, name)
-        return buffer.show(update, text=text, kind=kind)
+        return buffer.show(update=update, text=text, kind=kind)
 
 ### Commands
 def check_signature(f, args, command=None):
@@ -563,7 +565,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
             {'name': 'ssl', 'default': ssl}
         ])
     elif name not in servers:
-        w.prnt(w_buffer, f"f{w.prefix('error')} No such server {name}")
+        w.prnt(w_buffer, f"{w.prefix('error')} No such server {name}")
     else:
         try_connect(servers[name])
 
@@ -1157,6 +1159,6 @@ if __name__ == '__main__' and import_ok:
         
         w.prnt("", "lichat.py\tis loaded ok")
 
-## TODO: when server disconnects, we fail to notice.
 ## TODO: buffer sending to avoid getting throttled by the server.
 ## TODO: lag estimation
+## TODO: config seems to get overridden / not properly saved sometimes?
