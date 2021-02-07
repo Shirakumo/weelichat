@@ -417,7 +417,7 @@ class Server:
             self.connect()
         except:
             cooldown = self.config('reconnect_cooldown', int)
-            self.show(text='Reconnect failed. Attempting again in {cooldown} seconds.')
+            self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.")
             w.hook_timer(cooldown, 1, 1, 'reconnect_cb', self.name)
 
     def delete(self):
