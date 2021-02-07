@@ -317,8 +317,11 @@ class Server:
                     self.reconnect()
         
         def on_misc(client, update):
-            if self.timeout != None: w.unhook(self.timeout)
-            self.timeout = w.hook_timer(1000*60, 1, 1, 'timeout_cb', self.name)
+            if self.timeout != None:
+                w.unhook(self.timeout)
+                self.timeout = None
+            if self.hook != None:
+                self.timeout = w.hook_timer(1000*60, 1, 1, 'timeout_cb', self.name)
             
             if isinstance(update, Failure):
                 self.show(update, kind='error')
