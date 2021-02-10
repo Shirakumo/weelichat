@@ -162,6 +162,7 @@ class Buffer:
         w.buffer_set(self.buffer, 'notify', '1')
         w.buffer_set(self.buffer, 'filter', '1')
         w.buffer_set(self.buffer, 'input_multiline', '1')
+        w.buffer_set(self.buffer, 'highlight_words', ','.join(server.highlight()))
         w.buffer_set(self.buffer, 'localvar_set_server', server.name)
         w.buffer_set(self.buffer, 'localvar_set_channel', channel)
         w.buffer_set(self.buffer, 'localvar_set_nick', server.client.username)
@@ -245,25 +246,19 @@ class Buffer:
                 tags.append(f"lichat_id_{str(update['id'])}")
             if update.get('from', None) != None:
                 tags.append(f"lichat_from_{update['from']}")
+                tags.append(f"nick_{update['from'].replace(' ','_')}")
         if text == None:
-            if isinstance(update, Join):
-                kind = 'join'
-                text = f"joined {update.channel}"
-            elif isinstance(update, Leave):
-                kind = 'quit'
-                text = f"left {update.channel}"
-            elif isinstance(update, Kick):
-                kind = 'quit'
-                text = f"has kicked {update.target} from {update.channel}"
-            elif isinstance(update, Update):
+            if isinstance(update, Update):
                 text = update.get('text', f"Update of type {type(update).__name__}")
             else:
                 text = f"BUG: Supposed to show non-update {update}"
         tags = ','.join(tags)
         if kind == 'text':
             w.prnt_date_tags(self.buffer, time, tags, f"{update['from']}\t{text}")
+            w.buffer_set(buffer.buffer, 'hotlist', w.WEECHAT_HOTLIST_MESSAGE)
         else:
             w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{update['from']}: {text}")
+            w.buffer_set(buffer.buffer, 'hotlist', w.WEECHAT_HOTLIST_LOW)
         return self
 
     def edit(self, update, text=None):
@@ -324,16 +319,16 @@ class Server:
                 self.timeout = w.hook_timer(1000*60, 1, 1, 'timeout_cb', self.name)
             
             if isinstance(update, Failure):
-                self.show(update, kind='error')
+                self.show(update, kind='error', tags=['irc_error', 'log3'])
 
-        def show(client, update):
-            self.show(update, kind='text')
+        def on_message(client, update):
+            buffer = self.show(update, kind='text', tags=['notify_message', 'irc_privmsg', 'log1'])
 
         def on_pause(client, update):
             if update.by == 0:
-                self.show(update, text=f"has disabled pause mode in {u.channel}")
+                self.show(update, text=f"has disabled pause mode in {u.channel}", tags=['no_highlight', 'log3'])
             else:
-                self.show(update, text=f"has enabled pause mode by {u.by} in {u.channel}")
+                self.show(update, text=f"has enabled pause mode by {u.by} in {u.channel}", tags=['no_highlight', 'log3'])
 
         def on_emote(client, update):
             self.client.emotes[update.name].offload(emote_dir)
@@ -356,22 +351,28 @@ class Server:
 
         def on_channel_info(client, update):
             (_, name) = update.key
-            buffer = self.show(update, text=f"{name}: {update.text}")
+            tags = ['no_highlight', 'log3']
+            if name == 'topic':
+                tags.append('irc_topic')
+            buffer = self.show(update, text=f"{name}: {update.text}", tags=tags)
             if name == 'topic':
                 w.buffer_set(buffer.buffer, 'title', update.text)
 
         def on_join(client, update):
-            buffer = self.show(update)
+            buffer = self.show(update, text=f"joined {update.channel}", kind='join', tags=['irc_join', 'no_highlight', 'log4'])
             buffer.join(update['from'])
             if update.channel == self.client.servername:
                 buffer.show(text=f"Supported extensions: {', '.join(self.client.extensions)}")
 
         def on_leave(client, update):
-            buffer = self.show(update)
+            buffer = self.show(update, text=f"left {update.channel}", kind='quit', tags=['irc_part', 'no_highlight', 'log4'])
             if update['from'] == self.client.username:
                 buffer.disconnect(False)
             else:
                 buffer.leave(update['from'])
+
+        def on_kick(client, update):
+            self.show(update, text=f"has kicked {update.target} from {update.channel}", kind='quit', tags=['irc_kick', 'no_highlight', 'log4'])
 
         def on_edit(client, update):
             self.buffers[update.channel].edit(update);
@@ -379,10 +380,10 @@ class Server:
         client.add_handler(Connect, on_connect)
         client.add_handler(Disconnect, on_disconnect)
         client.add_handler(Update, on_misc)
-        client.add_handler(Message, show)
+        client.add_handler(Message, on_message)
         client.add_handler(Join, on_join)
         client.add_handler(Leave, on_leave)
-        client.add_handler(Kick, show)
+        client.add_handler(Kick, on_kick)
         client.add_handler(Pause, on_pause)
         client.add_handler(Emote, on_emote)
         client.add_handler(Data, on_data)
@@ -392,6 +393,10 @@ class Server:
 
     def config(self, key, type=str, default=None):
         return cfg('server', self.name+'.'+key, type, default)
+
+    def highlight(self):
+        parts = self.config('highlight', str, '').split(',') + cfg('behaviour', 'highlight', str, '').split(',')
+        return [ self.client.username if x == 'username' else x for x in parts ]
 
     def is_supported(self, extension):
         return self.client.is_supported(extension)
@@ -434,7 +439,7 @@ class Server:
     def send_cb(self, cb, type, **args):
         return self.client.send_callback(cb, type, **args)
 
-    def show(self, update=None, text=None, kind='action', buffer=None):
+    def show(self, update=None, text=None, kind='action', tags=[], buffer=None):
         if buffer == None and isinstance(update, UpdateFailure):
             origin = self.client.origin(update)
             if origin != None and not isinstance(origin, Leave):
@@ -448,7 +453,7 @@ class Server:
             buffer = self.buffers.get(name, None)
             if buffer == None:
                 buffer = Buffer(self, name)
-        return buffer.show(update=update, text=text, kind=kind)
+        return buffer.show(update=update, text=text, kind=kind, tags=tags)
 
 ### Commands
 def check_signature(f, args, command=None):
@@ -1139,7 +1144,8 @@ if __name__ == '__main__' and import_ok:
         config_section(config_file, 'behaviour', [
             {'name': 'data_save_directory', 'default': w.info_get('weechat_dir', '')+'/lichat/downloads/'},
             {'name': 'data_save_types', 'default': 'all'},
-            {'name': 'imgur_client_id', 'default': ''}
+            {'name': 'imgur_client_id', 'default': ''},
+            {'name': 'highlight', 'default': ''}
         ])
         config_section(config_file, 'server_default', [
             {'name': 'host', 'default': ''},
@@ -1150,7 +1156,8 @@ if __name__ == '__main__' and import_ok:
             {'name': 'connect', 'default': True},
             {'name': 'ssl', 'default': False},
             {'name': 'reconnect', 'default': True},
-            {'name': 'reconnect_cooldown', 'default': 60}
+            {'name': 'reconnect_cooldown', 'default': 60},
+            {'name': 'highlight', 'default': 'username'}
         ])
         config_section(config_file, 'server', [
             {'name': 'tynet.host', 'default': 'chat.tymoon.eu'},
@@ -1161,7 +1168,8 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.connect', 'default': False},
             {'name': 'tynet.ssl', 'default': False},
             {'name': 'tynet.reconnect', 'default': True},
-            {'name': 'tynet.reconnect_cooldown', 'default': 60}
+            {'name': 'tynet.reconnect_cooldown', 'default': 60},
+            {'name': 'highlight', 'default': 'username'}
         ])
         config_reload_cb('', config_file)
         
