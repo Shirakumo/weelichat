@@ -2,9 +2,9 @@
 # boilerplate based on cmd_help.py
 #
 SCRIPT_NAME = 'lichat'
-SCRIPT_AUTHOR = 'Georgiy Tugai <georgiy@crossings.link>'
-SCRIPT_VERSION = '0.1'
-SCRIPT_LICENSE = ''
+SCRIPT_AUTHOR = 'Georgiy Tugai <georgiy@crossings.link>, Nicolas Hafner <shinmera@tymoon.eu>'
+SCRIPT_VERSION = '0.9'
+SCRIPT_LICENSE = 'zlib'
 SCRIPT_DESC = 'Client for Lichat protocol (https://shirakumo.github.io/lichat)'
 
 import_ok = True
