@@ -299,7 +299,7 @@ class Server:
         client.reload_emotes(emote_dir)
 
         def on_connect(client, update):
-            for channel in self.config('channels', str, '').split('  '):
+            for channel in self.config('autojoin', str, '').split('  '):
                 self.send(Join, channel=channel)
 
         def on_disconnect(client, update):
@@ -308,7 +308,7 @@ class Server:
             if self.hook != None:
                 w.unhook(self.hook)
                 self.hook = None
-                if self.config('reconnect', bool):
+                if self.config('autoreconnect', bool):
                     self.reconnect()
         
         def on_misc(client, update):
@@ -424,7 +424,7 @@ class Server:
             self.show(text='Reconnecting...')
             self.connect()
         except:
-            cooldown = self.config('reconnect_cooldown', int)
+            cooldown = self.config('autoreconnect_delay', int)
             self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.")
             w.hook_timer(cooldown, 1, 1, 'reconnect_cb', self.name)
 
@@ -571,9 +571,9 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
             {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
             {'name': 'username', 'default': username},
             {'name': 'password', 'default': password},
-            {'name': 'channels', 'default': ''},
-            {'name': 'connect', 'default': True},
-            {'name': 'ssl', 'default': ssl}
+            {'name': 'ssl', 'default': ssl},
+            {'name': 'autoconnect', 'default': True},
+            {'name': 'autojoin', 'default': ''}
         ])
     elif name not in servers:
         w.prnt(w_buffer, f"{w.prefix('error')} No such server {name}")
@@ -1101,7 +1101,7 @@ def config_reload_cb(_data, file):
                    port=w.config_integer(sconf['port']),
                    ssl=w.config_boolean(sconf['ssl']))
         instance = servers[server]
-        if w.config_boolean(sconf['connect']) and not instance.is_connected():
+        if w.config_boolean(sconf['autoconnect']) and not instance.is_connected():
             instance.connect()
     return w.WEECHAT_RC_OK
 
@@ -1152,11 +1152,11 @@ if __name__ == '__main__' and import_ok:
             {'name': 'port', 'default': 1111, 'min': 1, 'max': 65535},
             {'name': 'username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
             {'name': 'password', 'default': ''},
-            {'name': 'channels', 'default': ''},
-            {'name': 'connect', 'default': True},
             {'name': 'ssl', 'default': False},
-            {'name': 'reconnect', 'default': True},
-            {'name': 'reconnect_cooldown', 'default': 60},
+            {'name': 'autojoin', 'default': ''},
+            {'name': 'autoconnect', 'default': True},
+            {'name': 'autoreconnect', 'default': True},
+            {'name': 'autoreconnect_delay', 'default': 60},
             {'name': 'highlight', 'default': 'username'}
         ])
         config_section(config_file, 'server', [
@@ -1164,11 +1164,11 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.port', 'default': 1111, 'min': 1, 'max': 65535},
             {'name': 'tynet.username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
             {'name': 'tynet.password', 'default': ''},
-            {'name': 'tynet.channels', 'default': 'lichatters'},
-            {'name': 'tynet.connect', 'default': False},
             {'name': 'tynet.ssl', 'default': False},
-            {'name': 'tynet.reconnect', 'default': True},
-            {'name': 'tynet.reconnect_cooldown', 'default': 60},
+            {'name': 'tynet.autojoin', 'default': 'lichatters'},
+            {'name': 'tynet.autoconnect', 'default': False},
+            {'name': 'tynet.autoreconnect', 'default': True},
+            {'name': 'tynet.autoreconnect_delay', 'default': 60},
             {'name': 'tynet.highlight', 'default': 'username'}
         ])
         config_reload_cb('', config_file)
