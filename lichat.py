@@ -341,13 +341,16 @@ class Server:
         def on_data(client, update):
             data = update.__dict__
             data['server'] = name
-            if imgur_client_id != '' and update['from'] != self.client.username and update['content-type'] in imgur_formats:
-                w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
-                self.show(update, text=f"Sent file {update['filename']} (Uploading...)")
-            elif data_save_directory != '' and (data_save_types == ['all'] or update['content-type'] in data_save_types):
-                data['url'] = f"{data_save_directory}/{time.strftime('%Y.%m.%d-%H-%M-%S')}-{data['filename']}"
-                w.hook_process('func:write_file', 0, 'process_upload', json.dumps(data))
-                self.show(update, text=f"Sent file {update['filename']} (Saving...)")
+            if update['from'] != self.client.username:
+                if imgur_client_id != '' and update['content-type'] in imgur_formats:
+                    w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
+                    self.show(update, text=f"Sent file {update['filename']} (Uploading...)")
+                elif data_save_directory != '' and (data_save_types == ['all'] or update['content-type'] in data_save_types):
+                    data['url'] = f"{data_save_directory}/{time.strftime('%Y.%m.%d-%H-%M-%S')}-{data['filename']}"
+                    w.hook_process('func:write_file', 0, 'process_upload', json.dumps(data))
+                    self.show(update, text=f"Sent file {update['filename']} (Saving...)")
+                else:
+                    self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})")
             else:
                 self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})")
 
@@ -954,11 +957,14 @@ def process_upload(_data, _command, return_code, out, err):
     if return_code == w.WEECHAT_HOOK_PROCESS_ERROR or out == '':
         w.prnt("", "Failed to upload file.")
     else:
-        data = json.loads(out)
-        update = make_instance(Message, **data)
-        buffer = find_buffer(data['server'], data['channel'])
-        if buffer != None:
-            buffer.edit(update)
+        try:
+            data = json.loads(out)
+            update = make_instance(Message, **data)
+            buffer = find_buffer(data['server'], data['channel'])
+            if buffer != None:
+                buffer.edit(update)
+        except Exception as e:
+            w.prnt("", f"Failed to upload file: couldn't parse:\n{out}")
     return w.WEECHAT_RC_OK
 
 ### Completion
