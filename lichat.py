@@ -255,10 +255,10 @@ class Buffer:
         tags = ','.join(tags)
         if kind == 'text':
             w.prnt_date_tags(self.buffer, time, tags, f"{update['from']}\t{text}")
-            w.buffer_set(buffer.buffer, 'hotlist', w.WEECHAT_HOTLIST_MESSAGE)
+            w.buffer_set(self.buffer, 'hotlist', '2')
         else:
             w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{update['from']}: {text}")
-            w.buffer_set(buffer.buffer, 'hotlist', w.WEECHAT_HOTLIST_LOW)
+            w.buffer_set(self.buffer, 'hotlist', '1')
         return self
 
     def edit(self, update, text=None):
@@ -395,7 +395,7 @@ class Server:
         return cfg('server', self.name+'.'+key, type, default)
 
     def highlight(self):
-        parts = self.config('highlight', str, '').split(',') + cfg('behaviour', 'highlight', str, '').split(',')
+        parts = self.config('highlight', str, 'username').split(',') + cfg('behaviour', 'highlight', str, '').split(',')
         return [ self.client.username if x == 'username' else x for x in parts ]
 
     def is_supported(self, extension):
@@ -1169,7 +1169,7 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.ssl', 'default': False},
             {'name': 'tynet.reconnect', 'default': True},
             {'name': 'tynet.reconnect_cooldown', 'default': 60},
-            {'name': 'highlight', 'default': 'username'}
+            {'name': 'tynet.highlight', 'default': 'username'}
         ])
         config_reload_cb('', config_file)
         
