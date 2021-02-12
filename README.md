@@ -6,3 +6,16 @@ Make sure you have [pylichat](https://github.com/shirakumo/py-lichat) available 
 The script has help for all of its commands under the `/lichat` prefix, and adds hooks to replace most standard IRC commands while in a Lichat buffer.
 
 If you want to chat with us about the development, join `lichat://chat.tymoon.eu/lichatters` or `irc://irc.freenode.net/#shirakumo`.
+
+## Easy Setup
+On the command line:
+```bash
+pip install pylichat && curl -o ~/.weechat/python/lichat.py https://raw.githubusercontent.com/shirakumo/weelichat/lichat.py
+```
+Then in Weechat:
+```
+/script load lichat.py
+/script autoload lichat.py
+/lichat connect
+/lichat help
+```
