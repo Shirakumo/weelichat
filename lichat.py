@@ -1142,22 +1142,36 @@ if __name__ == '__main__' and import_ok:
         
         config_file = w.config_new('lichat', 'config_reload_cb', '')
         config_section(config_file, 'behaviour', [
-            {'name': 'data_save_directory', 'default': w.info_get('weechat_dir', '')+'/lichat/downloads/'},
-            {'name': 'data_save_types', 'default': 'all'},
-            {'name': 'imgur_client_id', 'default': ''},
-            {'name': 'highlight', 'default': ''}
+            {'name': 'data_save_directory', 'default': w.info_get('weechat_dir', '')+'/lichat/downloads/',
+             'description': f"Where to save uploaded files to."},
+            {'name': 'data_save_types', 'default': 'all',
+             'description': f"Which file types to save locally. Should be a comma-separated list of mime-types. Setting to 'all' will save files of any type."},
+            {'name': 'imgur_client_id', 'default': '',
+             'description': f"An imgur.com client ID token. If set, will upload compatible data files to imgur and replace with a link instead of saving the file locally."},
+            {'name': 'highlight', 'default': '',
+             'description': f"A comma-separated list of words to highlight in any Lichat buffer."}
         ])
         config_section(config_file, 'server_default', [
-            {'name': 'host', 'default': ''},
-            {'name': 'port', 'default': 1111, 'min': 1, 'max': 65535},
-            {'name': 'username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
-            {'name': 'password', 'default': ''},
-            {'name': 'ssl', 'default': False},
-            {'name': 'autojoin', 'default': ''},
-            {'name': 'autoconnect', 'default': True},
-            {'name': 'autoreconnect', 'default': True},
-            {'name': 'autoreconnect_delay', 'default': 60},
-            {'name': 'highlight', 'default': 'username'}
+            {'name': 'host', 'default': '',
+             'description': f"The default hostname to use."},
+            {'name': 'port', 'default': 1111, 'min': 1, 'max': 65535,
+             'description': f"The default port to use. The official Lichat default port is 1111."},
+            {'name': 'username', 'default': w.config_string(w.config_get('irc.server_default.username')),
+             'description': f"The username to connect with. Leaving this empty will make the server choose a name for you."},
+            {'name': 'password', 'default': '',
+             'description': f"The password to connect with, in case the username is registered."},
+            {'name': 'ssl', 'default': False,
+             'description': f"Whether to connect with SSL. The server must support this. The default port for SSL is 1112."},
+            {'name': 'autojoin', 'default': '',
+             'description': f"Which channels to join by default. Should be a double-space-separated list."},
+            {'name': 'autoconnect', 'default': True,
+             'description': f"Whether to automatically connect to this server when the lichat script is loaded."},
+            {'name': 'autoreconnect', 'default': True,
+             'description': f"Whether to automatically reconnect when the client disconnects for some reason."},
+            {'name': 'autoreconnect_delay', 'default': 60,
+             'description': f"How long to wait between reconnection attempts, in seconds."},
+            {'name': 'highlight', 'default': 'username',
+             'description': f"A comma-separated list of words to highlight in any buffer for this server. The special word 'username' will be replaced with the username used for this server."}
         ])
         config_section(config_file, 'server', [
             {'name': 'tynet.host', 'default': 'chat.tymoon.eu'},
