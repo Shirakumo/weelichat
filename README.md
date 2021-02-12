@@ -8,14 +8,29 @@ The script has help for all of its commands under the `/lichat` prefix, and adds
 If you want to chat with us about the development, join `lichat://chat.tymoon.eu/lichatters` or `irc://irc.freenode.net/#shirakumo`.
 
 ## Easy Setup
-On the command line:
+On the command line, fetch the library and script
 ```bash
 pip install pylichat && curl -o ~/.weechat/python/lichat.py https://raw.githubusercontent.com/shirakumo/weelichat/lichat.py
 ```
-Then in Weechat:
+Then in Weechat, load the script
 ```
 /script load lichat.py
 /script autoload lichat.py
+```
+Set up your preferred account
+```
+/set lichat.server.tynet.username My Username
+```
+If your account is registered
+```
+/set lichat.server.tynet.password My pw
+```
+Finally, connect
+```
+/set lichat.server.tynet.autoconnect on
 /lichat connect
+```
+For help on available commands
+```
 /lichat help
 ```
