@@ -531,29 +531,29 @@ def lichat_command_cb(data, w_buffer, args_str):
 
     return command['func'](data, w_buffer, shlex.join(args))
 
+def try_connect(w_buffer, server):
+    try:
+        server.connect()
+    except ConnectionFailed as e:
+        if isinstance(e.update, InvalidPassword):
+            w.prnt(w_buffer, f"[{server.name}] The password is invalid!")
+        elif isinstance(e.update, NoSuchProfile):
+            w.prnt(w_buffer, f"[{server.name}] The given username is not registered and does not require a password!")
+        elif isinstance(e.update, TooManyConnections):
+            w.prnt(w_buffer, f"[{server.name}] The server has too many connections and refused yours.")
+        elif isinstance(e.update, TextUpdate):
+            w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e.update.text}")
+        else:
+            w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e}")
+    except Exception as e:
+        w.prnt(w_buffer, f"[{server.name}] Unexpected failure: {e}")
+
 @raw_command('connect', '%(lichat_server)', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
 def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None, password=None, ssl=None):
-    def try_connect(server):
-        try:
-            server.connect()
-        except ConnectionFailed as e:
-            if isinstance(e.update, InvalidPassword):
-                w.prnt(w_buffer, f"[{server.name}] The password is invalid!")
-            elif isinstance(e.update, NoSuchProfile):
-                w.prnt(w_buffer, f"[{server.name}] The given username is not registered and does not require a password!")
-            elif isinstance(e.update, TooManyConnections):
-                w.prnt(w_buffer, f"[{server.name}] The server has too many connections and refused yours.")
-            elif isinstance(e.update, TextUpdate):
-                w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e.update.text}")
-            else:
-                w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e}")
-        except Exception as e:
-            w.prnt(w_buffer, f"[{server.name}] Unexpected failure: {e}")
-    
     if name == None:
         for server in servers:
             if not servers[server].is_connected():
-                try_connect(servers[server])
+                try_connect(w_buffer, servers[server])
     elif host != None:
         if name in servers:
             w.prnt(w_buffer, f"f{w.prefix('error')} A server of that name already exists.")
@@ -565,7 +565,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
         if ssl == None: ssl = cfg('server_default', 'ssl', bool)
         if ssl == 'on': ssl = True
         if ssl == 'off': ssl = False
-        try_connect(Server(name=name, username=username, password=evaluate_string(password), host=host, port=port, ssl=ssl))
+        try_connect(w_buffer, Server(name=name, username=username, password=evaluate_string(password), host=host, port=port, ssl=ssl))
         config_section(config_file, 'server', [
             {'name': 'host', 'default': host},
             {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
@@ -578,7 +578,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
     elif name not in servers:
         w.prnt(w_buffer, f"{w.prefix('error')} No such server {name}")
     else:
-        try_connect(servers[name])
+        try_connect(w_buffer, servers[name])
 
 
 @lichat_command('disconnect', '%(lichat_server) %-', 'Disconnect from a lichat server. If no name is given, the server of the current channel is disconnected.')
@@ -1108,7 +1108,7 @@ def config_reload_cb(_data, file):
                    ssl=w.config_boolean(sconf['ssl']))
         instance = servers[server]
         if w.config_boolean(sconf['autoconnect']) and not instance.is_connected():
-            instance.connect()
+            try_connect('', instance)
     return w.WEECHAT_RC_OK
 
 def config_section(file, section_name, options):
