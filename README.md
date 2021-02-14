@@ -10,12 +10,13 @@ If you want to chat with us about the development, join `lichat://chat.tymoon.eu
 ## Easy Setup
 On the command line, fetch the library and script
 ```bash
-pip install pylichat && curl -o ~/.weechat/python/lichat.py https://raw.githubusercontent.com/shirakumo/weelichat/lichat.py
+pip install pylichat
+curl -o ~/.weechat/python/lichat.py https://raw.githubusercontent.com/shirakumo/weelichat/lichat.py
+ln -s ~/.weechat/python/lichat.py ~/.weechat/python/autoload/lichat.py
 ```
 Then in Weechat, load the script
 ```
 /script load lichat.py
-/script autoload lichat.py
 ```
 Set up your preferred account
 ```
