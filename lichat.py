@@ -878,7 +878,7 @@ def read_file(data):
     data = json.loads(data)
     try:
         with open(data['url'], 'rb') as file:
-            data['payload'] = str(base64.b64encode(file.read()))
+            data['payload'] = str(base64.b64encode(file.read()), 'utf-8')
         (content_type, _) = mimetypes.guess_type(data['url'], False)
         data['content-type'] = content_type
         data['filename'] = Path(data['url']).stem
@@ -896,7 +896,7 @@ def download_file(data):
     try:
         r = requests.get(data['url'], allow_redirects=True)
         if r.status_code == 200:
-            data['payload'] = str(base64.b64encode(r.content))
+            data['payload'] = str(base64.b64encode(r.content), 'utf-8')
             data['content-type'] = r.headers.get('content-type').split(';')[0]
             match = re.compile('filename="([^"]+)"').search(r.headers.get('content-disposition') or '')
             if match != None:
