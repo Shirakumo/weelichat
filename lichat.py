@@ -897,7 +897,7 @@ def download_file(data):
         r = requests.get(data['url'], allow_redirects=True)
         if r.status_code == 200:
             data['payload'] = str(base64.b64encode(r.content))
-            data['content-type'] = r.headers.get('content-type')
+            data['content-type'] = r.headers.get('content-type').split(';')[0]
             match = re.compile('filename="([^"]+)"').search(r.headers.get('content-disposition') or '')
             if match != None:
                 data['filename'] = match.group(1)
