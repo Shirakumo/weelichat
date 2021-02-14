@@ -391,8 +391,8 @@ class Server:
         client.add_handler(SetChannelInfo, on_channel_info)
         servers[name] = self
 
-    def config(self, key, type=str, default=None):
-        return cfg('server', self.name+'.'+key, type, default)
+    def config(self, key, type=str, default=None, evaluate=False):
+        return cfg('server', self.name+'.'+key, type, default, evaluate)
 
     def highlight(self):
         parts = self.config('highlight', str, 'username').split(',') + cfg('behaviour', 'highlight', str, '').split(',')
@@ -565,7 +565,7 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
         if ssl == None: ssl = cfg('server_default', 'ssl', bool)
         if ssl == 'on': ssl = True
         if ssl == 'off': ssl = False
-        try_connect(Server(name=name, username=username, password=password, host=host, port=port, ssl=ssl))
+        try_connect(Server(name=name, username=username, password=evaluate_string(password), host=host, port=port, ssl=ssl))
         config_section(config_file, 'server', [
             {'name': 'host', 'default': host},
             {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
@@ -1051,10 +1051,16 @@ def input_complete_cb(_data, w_buffer, command):
     return w.WEECHAT_RC_OK
 
 ### Config
-def cfg(section, option, type=str, default=None):
+def evaluate_string(string):
+    return w.string_eval_expression(string, {}, {}, {})
+
+def cfg(section, option, type=str, default=None, evaluate=False):
     cfg = config[section].get(option, None)
     if cfg == None: return default
-    if type == str: return w.config_string(cfg)
+    if type == str:
+        string = w.config_string(cfg)
+        if evaluate: return evaluate_string(string)
+        else: return string
     elif type == bool: return w.config_boolean(cfg)
     elif type == int: return w.config_integer(cfg)
 
@@ -1096,7 +1102,7 @@ def config_reload_cb(_data, file):
         if server not in servers:
             Server(name=server,
                    username=w.config_string(sconf['username']),
-                   password=w.config_string(sconf['password']),
+                   password=evaluate_string(w.config_string(sconf['password'])),
                    host=w.config_string(sconf['host']),
                    port=w.config_integer(sconf['port']),
                    ssl=w.config_boolean(sconf['ssl']))
