@@ -53,7 +53,7 @@ def register_command(name, func, description='', cmdtype='lichat', completion=''
     commands[name] = {'name': name, 'func': func, 'description': description, 'cmdtype': cmdtype, 'completion': completion}
 
 def call_command(buffer, name, *args):
-    return commands[name]['func']('', buffer.buffer, shlex.join(args))
+    return commands[name]['func']('', buffer.buffer, args)
 
 def find_buffer(server, channel):
     server = servers.get(server, None)
@@ -482,7 +482,9 @@ def raw_command(name, completion='', description=''):
     def nested(f):
         @wraps(f)
         def wrapper(_data, w_buffer, args_str):
-            args = shlex.split(args_str)
+            args = args_str
+            if isinstance(args, str):
+                args = shlex.split(args)
             args.pop(0)
             if check_signature(f, [w_buffer, *args], command=name):
                 f(w_buffer, *args)
@@ -500,7 +502,9 @@ def lichat_command(name, completion='', description=''):
             buffer = weechat_buffer_to_representation(w_buffer)
             if buffer is None:
                 return w.WEECHAT_RC_OK
-            args = shlex.split(args_str)
+            args = args_str
+            if isinstance(args, str):
+                args = shlex.split(args)
             args.pop(0)
             if check_signature(f, [buffer, *args], command=name):
                 f(buffer, *args)
@@ -535,7 +539,7 @@ def lichat_command_cb(data, w_buffer, args_str):
         w.prnt(w_buffer, f"{w.prefix('error')}lichat: command \"lichat {name}\" must be executed on lichat buffer (server, channel or private)")
         return w.WEECHAT_RC_ERROR
 
-    return command['func'](data, w_buffer, shlex.join(args))
+    return command['func'](data, w_buffer, args)
 
 def try_connect(w_buffer, server):
     try:
