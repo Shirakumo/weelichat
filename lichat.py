@@ -9,6 +9,12 @@ SCRIPT_DESC = 'Client for Lichat protocol (https://shirakumo.github.io/lichat)'
 
 import_ok = True
 
+import sys
+if sys.version_info[0] < 3 or sys.version_info[1] < 7:
+    print('Your Python version ('+str(sys.version_info[0])+'.'+str(sys.version_info[1])+') is too old!')
+    print('Please update to 3.7 or later.')
+    import_ok = False
+
 try:
     import weechat as w
 except ImportError:
