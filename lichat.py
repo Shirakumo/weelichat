@@ -259,11 +259,14 @@ class Buffer:
             else:
                 text = f"BUG: Supposed to show non-update {update}"
         tags = ','.join(tags)
+        source = update['from']
+        if update.get('bridge', None) != None:
+            source = source+'*'
         if kind == 'text':
-            w.prnt_date_tags(self.buffer, time, tags, f"{update['from']}\t{text}")
+            w.prnt_date_tags(self.buffer, time, tags, f"{source}\t{text}")
             w.buffer_set(self.buffer, 'hotlist', '2')
         else:
-            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{update['from']}: {text}")
+            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}: {text}")
             w.buffer_set(self.buffer, 'hotlist', '1')
         return self
 
@@ -888,6 +891,10 @@ def away_command_cb(buffer, value=None):
 @lichat_command('status', '', """Update your status""")
 def status_command_cb(buffer, *text):
     buffer.send(SetUserInfo, key=kw('status'), text=' '.join(text))
+
+@lichat_command('send-as', '%(nicks) %-', """Send a message as another user in the current channel. Requires the BRIDGE capability.""")
+def send_as_command_cb(buffer, user, *text):
+    buffer.send(Message, bridge=user, text=' '.join(text))
 
 ### Async
 def read_file(data):
