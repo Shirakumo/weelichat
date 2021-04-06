@@ -243,30 +243,40 @@ class Buffer:
 
     def show(self, update=None, text=None, kind='action', tags=[]):
         time = 0
-        if update == None:
+        prefix_color = ""
+
+        if update is None:
             update = {'from': self.server.client.servername}
         else:
             time = update.unix_clock()
             tags.append(f"lichat_type_{update.__class__.__name__.lower()}")
-            if update.get('id', None) != None:
+            if update.get('id'):
                 tags.append(f"lichat_id_{str(update['id'])}")
-            if update.get('from', None) != None:
+            if update.get('from'):
                 tags.append(f"lichat_from_{update['from']}")
                 tags.append(f"nick_{update['from'].replace(' ','_')}")
-        if text == None:
+
+        if text is None:
             if isinstance(update, Update):
                 text = update.get('text', f"Update of type {type(update).__name__}")
             else:
                 text = f"BUG: Supposed to show non-update {update}"
+
+        if update.get('from') and (kind in ["text", "action"]
+                                   or w.config_boolean(w.config_get("irc.look.color_nicks_in_server_messages"))):
+            prefix_color = w.color(w.info_get("nick_color_name", update['from']))
+
         tags = ','.join(tags)
-        source = update['from']
-        if update.get('bridge', None) != None:
-            source = source+'*'
+        source = f"{prefix_color}{update['from']}"
+
+        if update.get('bridge'):
+            source = f"{source}{w.color('reset')}*"
+
         if kind == 'text':
             w.prnt_date_tags(self.buffer, time, tags, f"{source}\t{text}")
             w.buffer_set(self.buffer, 'hotlist', '2')
         else:
-            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}: {text}")
+            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}{w.color('reset')}: {text}")
             w.buffer_set(self.buffer, 'hotlist', '1')
         return self
 
