@@ -854,6 +854,43 @@ def edit_command_cb(buffer, line=None, *text):
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages from you. Don't know how to access message {line-1}.", kind='error')
 
+@lichat_command('react', '1', 'React to a previous message. Can use emotes or Unicode emoji.')
+def react_command_cb(buffer, line=None, *text):
+    if line == None:
+        pass # TODO: interactive selection
+    else:
+        line = int(line)+1
+        text = ' '.join(text)
+        message = 'lichat_type_message'
+        seen_ids = [('', '')]
+        def matcher(h_line, h_line_data, line):
+            found_source = False
+            found_message = False
+            id = None
+            fr = None
+            data = w.hdata_pointer(h_line, line, 'data')
+            for i in range(w.hdata_integer(h_line_data, data, 'tags_count')):
+                tag = w.hdata_string(h_line_data, data, f"{i}|tags_array")
+                if tag == message: found_message = True
+                if tag.startswith('lichat_id_'): id = tag[10:]
+                if tag.startswith('lichat_from_'): fr = tag[12:]
+                ## If this is ours, check.
+            if found_message and id != None and fr != None:
+                ## If this is a new ID, append it to the stack.
+                if seen_ids[-1][0] != id:
+                    seen_ids.append([id, fr])
+                    ## If we've now reached the first message of the ones we want, we're good to go.
+            return len(seen_ids) == line
+        
+        ## Last ID is now ID we want
+        search_buffer(buffer.buffer, matcher, gather=False)
+        if len(seen_ids) == line:
+            (id, fr) = seen_ids[-1]
+            buffer.send(React, udate_id=int(id), target=fr, emote=text)
+        else:
+            buffer.show(text=f"Only found {len(seen_ids)-1} messages. Don't know how to access message {line-1}.", kind='error')
+
+
 @lichat_command('query', '%(nicks) %*', 'Join a private channel with a number of other users.')
 def query_command_cb(buffer, *targets):
     @handle_failure(buffer)
