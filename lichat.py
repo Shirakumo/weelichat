@@ -449,7 +449,7 @@ class Server:
             self.show(text='Reconnecting...')
             self.connect()
         except:
-            cooldown = self.config('autoreconnect_delay', int)
+            cooldown = max(1, self.config('autoreconnect_delay', int))
             self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.")
             w.hook_timer(cooldown, 1, 1, 'reconnect_cb', self.name)
 
@@ -755,7 +755,7 @@ def users_command_cb(buffer, channel=None):
         buffer.show(text=f"Currently in channel: {' '.join(users.users)}")
     buffer.send_cb(callback, Users, channel=channel)
 
-@lichat_command('channels', '%(lichat_channel) %-', 'List the channels of the current server. If the server supports the channel-trees extension, only channels below the specified channel are retuurned. If no channel is specified, all top-level channels are returned.')
+@lichat_command('channels', '%(lichat_channel) %-', 'List the channels of the current server. If the server supports the channel-trees extension, only channels below the specified channel are returned. If no channel is specified, all top-level channels are returned.')
 def channels_command_cb(buffer, channel=''):
     @handle_failure(buffer)
     def callback(channels):
