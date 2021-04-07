@@ -396,6 +396,10 @@ class Server:
         def on_edit(client, update):
             self.buffers[update.channel].edit(update);
 
+        def on_react(client, update):
+            ## FIXME: use a separate dedicated reactions line below each message.
+            self.show(update, text=f"{update['from']} reacted with {update.emote}", tags=['no_highlight', 'log4'])
+
         def on_users(client, update):
             buffer = self.buffers[update.channel];
             for user in update.users:
@@ -412,6 +416,7 @@ class Server:
         client.add_handler(Emote, on_emote)
         client.add_handler(Data, on_data)
         client.add_handler(Edit, on_edit)
+        client.add_handler(React, on_react)
         client.add_handler(Users, on_users)
         client.add_handler(SetChannelInfo, on_channel_info)
         servers[name] = self
