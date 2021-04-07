@@ -630,7 +630,7 @@ def help_command_cb(w_buffer, topic=None):
             command = commands[name]
             w.prnt(w_buffer, f"{name}\t{command['description']}")
     else:
-        command = ommcands.get(topic, None)
+        command = commands.get(topic, None)
         if command == None:
             w.prnt(w_buffer, f"{w.prefix('error')} No such command {command}")
         else:
