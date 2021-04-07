@@ -864,7 +864,7 @@ def edit_command_cb(buffer, line=None, *text):
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages from you. Don't know how to access message {line-1}.", kind='error')
 
-@lichat_command('react', '1', 'React to a previous message. Can use emotes or Unicode emoji.')
+@lichat_command('react', '1 %(lichat_emote)', 'React to a previous message. Can use emotes or Unicode emoji.')
 def react_command_cb(buffer, line=None, *text):
     if line == None:
         pass # TODO: interactive selection
@@ -1072,7 +1072,7 @@ def emote_completion_cb(_data, item, w_buffer, completion):
     if buffer == None: return w.WEECHAT_RC_OK
     
     for emote in buffer.server.client.emotes:
-        w.hook_completion_list_add(completion, ':'+emote+':', 0, w.WEECHAT_LIST_POS_SORT)
+        w.hook_completion_list_add(completion, emote, 0, w.WEECHAT_LIST_POS_SORT)
     return w.WEECHAT_RC_OK
 
 def last_emote(text, emotes):
