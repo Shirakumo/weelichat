@@ -864,8 +864,8 @@ def edit_command_cb(buffer, line=None, *text):
         
         ## Last ID is now ID we want
         search_buffer(buffer.buffer, matcher, gather=False)
-        if len(seen_ids) == line:
-            buffer.send(Edit, id=int(seen_ids[-1]), text=text)
+        if line <= len(seen_ids):
+            buffer.send(Edit, id=int(seen_ids[line-1]), text=text)
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages from you. Don't know how to access message {line-1}.", kind='error')
 
@@ -894,13 +894,13 @@ def react_command_cb(buffer, line=None, *text):
                 ## If this is a new ID, append it to the stack.
                 if seen_ids[-1][0] != id:
                     seen_ids.append([id, fr])
-                    ## If we've now reached the first message of the ones we want, we're good to go.
+            ## If we've now reached the first message of the ones we want, we're good to go.
             return len(seen_ids) == line
         
         ## Last ID is now ID we want
         search_buffer(buffer.buffer, matcher, gather=False)
-        if len(seen_ids) == line:
-            (id, fr) = seen_ids[-1]
+        if line <= len(seen_ids):
+            (id, fr) = seen_ids[line-1]
             buffer.send(React, udate_id=int(id), target=fr, emote=text)
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages. Don't know how to access message {line-1}.", kind='error')
