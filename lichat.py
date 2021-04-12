@@ -839,8 +839,13 @@ def edit_command_cb(buffer, line=None, *text):
     if line == None:
         pass # TODO: interactive edit selection
     else:
-        line = int(line)+1
-        text = ' '.join(text)
+        line = 1
+        text = ''
+        if line.isdigit():
+            line = int(line)
+            text = ' '.join(text)
+        else:
+            text = line+' '+' '.join(text)
         source = 'lichat_from_'+buffer.server.client.username
         message = 'lichat_type_message'
         seen_ids = ['']
@@ -860,12 +865,12 @@ def edit_command_cb(buffer, line=None, *text):
                 if seen_ids[-1] != id:
                     seen_ids.append(id)
             ## If we've now reached the first message of the ones we want, we're good to go.
-            return len(seen_ids) == line
+            return len(seen_ids)+1 == line
         
         ## Last ID is now ID we want
         search_buffer(buffer.buffer, matcher, gather=False)
-        if line <= len(seen_ids):
-            buffer.send(Edit, id=int(seen_ids[line-1]), text=text)
+        if line < len(seen_ids):
+            buffer.send(Edit, id=int(seen_ids[line]), text=text)
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages from you. Don't know how to access message {line-1}.", kind='error')
 
@@ -874,8 +879,13 @@ def react_command_cb(buffer, line=None, *text):
     if line == None:
         pass # TODO: interactive selection
     else:
-        line = int(line)+1
-        text = ' '.join(text)
+        line = 1
+        text = ''
+        if line.isdigit():
+            line = int(line)
+            text = ' '.join(text)
+        else:
+            text = line+' '+' '.join(text)
         message = 'lichat_type_message'
         seen_ids = [('', '')]
         def matcher(h_line, h_line_data, line):
@@ -895,12 +905,12 @@ def react_command_cb(buffer, line=None, *text):
                 if seen_ids[-1][0] != id:
                     seen_ids.append([id, fr])
             ## If we've now reached the first message of the ones we want, we're good to go.
-            return len(seen_ids) == line
+            return len(seen_ids)+1 == line
         
         ## Last ID is now ID we want
         search_buffer(buffer.buffer, matcher, gather=False)
-        if line <= len(seen_ids):
-            (id, fr) = seen_ids[line-1]
+        if line < len(seen_ids):
+            (id, fr) = seen_ids[line]
             buffer.send(React, udate_id=int(id), target=fr, emote=text)
         else:
             buffer.show(text=f"Only found {len(seen_ids)-1} messages. Don't know how to access message {line-1}.", kind='error')
