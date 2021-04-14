@@ -345,9 +345,9 @@ class Server:
 
         def on_pause(client, update):
             if update.by == 0:
-                self.show(update, text=f"{u['from']} has disabled pause mode in {u.channel}", tags=['no_highlight', 'log3'])
+                self.show(update, text=f"has disabled pause mode in {u.channel}", tags=['no_highlight', 'log3'])
             else:
-                self.show(update, text=f"{u['from']} has enabled pause mode by {u.by} in {u.channel}", tags=['no_highlight', 'log3'])
+                self.show(update, text=f"has enabled pause mode by {u.by} in {u.channel}", tags=['no_highlight', 'log3'])
 
         def on_emote(client, update):
             self.client.emotes[update.name].offload(emote_dir)
@@ -358,15 +358,15 @@ class Server:
             if update['from'] != self.client.username:
                 if imgur_client_id != '' and update['content-type'] in imgur_formats:
                     w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
-                    self.show(update, text=f"{u['from']} sent file {update['filename']} (Uploading...)")
+                    self.show(update, text=f"Sent file {update['filename']} (Uploading...)")
                 elif data_save_directory != '' and (data_save_types == ['all'] or update['content-type'] in data_save_types):
                     data['url'] = f"{data_save_directory}/{time.strftime('%Y.%m.%d-%H-%M-%S')}-{data['filename']}"
                     w.hook_process('func:write_file', 0, 'process_upload', json.dumps(data))
-                    self.show(update, text=f"{u['from']} sent file {update['filename']} (Saving...)")
+                    self.show(update, text=f"Sent file {update['filename']} (Saving...)")
                 else:
-                    self.show(update, text=f"{u['from']} sent file {update['filename']} ({update['content-type']})")
+                    self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})")
             else:
-                self.show(update, text=f"{u['from']} sent file {update['filename']} ({update['content-type']})")
+                self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})")
 
         def on_channel_info(client, update):
             (_, name) = update.key
