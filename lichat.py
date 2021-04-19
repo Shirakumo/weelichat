@@ -839,13 +839,13 @@ def edit_command_cb(buffer, line=None, *text):
     if line == None:
         pass # TODO: interactive edit selection
     else:
-        line = 1
         text = ''
         if line.isdigit():
             line = int(line)
             text = ' '.join(text)
         else:
             text = line+' '+' '.join(text)
+            line = 1
         source = 'lichat_from_'+buffer.server.client.username
         message = 'lichat_type_message'
         seen_ids = ['']
@@ -879,13 +879,13 @@ def react_command_cb(buffer, line=None, *text):
     if line == None:
         pass # TODO: interactive selection
     else:
-        line = 1
         text = ''
         if line.isdigit():
             line = int(line)
             text = ' '.join(text)
         else:
             text = line+' '+' '.join(text)
+            line = 1
         message = 'lichat_type_message'
         seen_ids = [('', '')]
         def matcher(h_line, h_line_data, line):
