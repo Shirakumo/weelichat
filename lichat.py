@@ -879,41 +879,36 @@ def react_command_cb(buffer, line=None, *text):
     if line == None:
         pass # TODO: interactive selection
     else:
-        text = ''
         if line.isdigit():
             line = int(line)
             text = ' '.join(text)
         else:
-            text = line+' '+' '.join(text)
+            text = line+(' '+' '.join(text) if 0<len(text) else '')
             line = 1
-        message = 'lichat_type_message'
-        seen_ids = [('', '')]
+        found = 0
+        message = (None, None)
         def matcher(h_line, h_line_data, line):
-            found_source = False
+            nonlocal found, message
             found_message = False
             id = None
             fr = None
             data = w.hdata_pointer(h_line, line, 'data')
             for i in range(w.hdata_integer(h_line_data, data, 'tags_count')):
                 tag = w.hdata_string(h_line_data, data, f"{i}|tags_array")
-                if tag == message: found_message = True
+                if tag == 'lichat_type_message': found_message = True
                 if tag.startswith('lichat_id_'): id = tag[10:]
                 if tag.startswith('lichat_from_'): fr = tag[12:]
-                ## If this is ours, check.
             if found_message and id != None and fr != None:
-                ## If this is a new ID, append it to the stack.
-                if seen_ids[-1][0] != id:
-                    seen_ids.append([id, fr])
-            ## If we've now reached the first message of the ones we want, we're good to go.
-            return len(seen_ids)+1 == line
+                found += 1
+                message = (id, fr)
+            return found == line
         
-        ## Last ID is now ID we want
         search_buffer(buffer.buffer, matcher, gather=False)
-        if line < len(seen_ids):
-            (id, fr) = seen_ids[line]
+        (id, fr) = message
+        if id != None:
             buffer.send(React, udate_id=int(id), target=fr, emote=text)
         else:
-            buffer.show(text=f"Only found {len(seen_ids)-1} messages. Don't know how to access message {line-1}.", kind='error')
+            buffer.show(text=f"Only found {found} messages. Don't know how to access message {line}.", kind='error')
 
 
 @lichat_command('query', '%(nicks) %*', 'Join a private channel with a number of other users.')
