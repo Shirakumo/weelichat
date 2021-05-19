@@ -688,11 +688,11 @@ The key must be a lichat symbol. By default the following symbols are recognised
   :contact
 However, a server may support additional symbols.""")
 def set_channel_info_command_cb(buffer, key, *value):
-    buffer.send(SetChannelInfo, key=wire.from_string(key), text=' '.join(value))
+    buffer.send(SetChannelInfo, key=pylichat.wire.from_string(key), text=' '.join(value))
 
 @lichat_command('channel-info', '%(lichat_channel_key)|T %(lichat_channel) %-', 'Retrieve channel information. If no channel name is given, defaults to the current channel. If no key is given, all channel info is requested.')
 def channel_info_command_cb(buffer, key='T', channel=None):
-    key = wire.from_string(key)
+    key = pylichat.wire.from_string(key)
     buffer.send(ChannelInfo, channel=channel, key=key)
 
 @lichat_command('topic', 'View or set the topic of the current channel.')
@@ -936,7 +936,7 @@ def set_user_info_command_cb(buffer, key, *value):
     @handle_failure(buffer)
     def callback(update):
         buffer.show(text=f"Field {key} updated.")
-    buffer.send_cb(callback, SetUserInfo, key=wire.from_string(key), text=' '.join(value))
+    buffer.send_cb(callback, SetUserInfo, key=pylichat.wire.from_string(key), text=' '.join(value))
 
 @lichat_command('away', 'on', """Set yourself as away (or present if no argument)""")
 def away_command_cb(buffer, value=None):
