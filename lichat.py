@@ -1179,6 +1179,7 @@ def config_reload_cb(_data, file):
     data_save_types = cfg('behaviour', 'data_save_types').split(',')
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
     for server, sconf in servers_options().items():
+        server = w.config_string(sconf['name']) or server
         if server not in servers:
             Server(name=server,
                    username=w.config_string(sconf['username']),
@@ -1238,6 +1239,8 @@ if __name__ == '__main__' and import_ok:
              'description': f"A comma-separated list of words to highlight in any Lichat buffer."}
         ])
         config_section(config_file, 'server_default', [
+            {'name': 'name', 'default': '',
+             'description': f"The name of the server network."},
             {'name': 'host', 'default': '',
              'description': f"The default hostname to use."},
             {'name': 'port', 'default': 1111, 'min': 1, 'max': 65535,
@@ -1260,6 +1263,7 @@ if __name__ == '__main__' and import_ok:
              'description': f"A comma-separated list of words to highlight in any buffer for this server. The special word 'username' will be replaced with the username used for this server."}
         ])
         config_section(config_file, 'server', [
+            {'name': 'tynet.name', 'default': 'TyNET'},
             {'name': 'tynet.host', 'default': 'chat.tymoon.eu'},
             {'name': 'tynet.port', 'default': 1111, 'min': 1, 'max': 65535},
             {'name': 'tynet.username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
