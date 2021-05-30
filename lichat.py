@@ -307,6 +307,7 @@ class Server:
 
     def __init__(self, name=None, username=None, password=None, host='chat.tymoon.eu', port=1111, ssl=False):
         client = Client(username, password)
+        self.buffers = pylichat.toolkit.CaseInsensitiveDict()
         self.name = name
         self.client = client
         self.host = host
