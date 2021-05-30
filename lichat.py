@@ -907,7 +907,8 @@ def react_command_cb(buffer, line=None, *text):
         search_buffer(buffer.buffer, matcher, gather=False)
         (id, fr) = message
         if id != None:
-            buffer.send(React, udate_id=int(id), target=fr, emote=text)
+            data = {'update-id': int(id), 'target': fr, 'emote': text}
+            buffer.send(React, **data)
         else:
             buffer.show(text=f"Only found {found} messages. Don't know how to access message {line}.", kind='error')
 
