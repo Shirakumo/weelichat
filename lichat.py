@@ -1194,7 +1194,7 @@ def config_reload_cb(_data, file):
             try_connect('', instance)
     return w.WEECHAT_RC_OK
 
-def config_section(file, section_name, options):
+def config_section(file, section_name, options, read_cb=''):
     def value_type(value):
         if isinstance(value, bool): # NB: bool is a subclass of int
             return 'boolean'
@@ -1207,7 +1207,7 @@ def config_section(file, section_name, options):
     if section_name in config:
         section = config[section_name]['__section__']
     else:
-        section = w.config_new_section(file, section_name, 1, 1, '', '', '', '', '', '', 'config_create_option_cb', section_name, 'config_delete_option_cb', section_name)
+        section = w.config_new_section(file, section_name, 1, 1, read_cb, '', '', '', '', '', 'config_create_option_cb', section_name, 'config_delete_option_cb', section_name)
         config[section_name] = {'__section__': section}
     
     for option in options:
@@ -1223,6 +1223,35 @@ def config_section(file, section_name, options):
                                                          default, default, 0,
                                                          '', '', '', '', '', '')
     return section
+
+
+def config_server_read_cb(data, file, section, name, value):
+    """Called when an option is read from file in the lichat.server
+    section -- even if that option hasn't been declared yet. Thus, we
+    can dynamically declare options.
+    """
+    parts = name.split('.', maxsplit=1)
+    option = w.config_search_option(file, section, name)
+    if option == '' and len(parts) > 1:
+        g = w.config_get(f"lichat.server.{parts[0]}.host")
+        if g == '':
+            config_section(config_file, 'server', [
+                {'name': f'{parts[0]}.name', 'default': f'{parts[0]}'},
+                {'name': f'{parts[0]}.host', 'default': ''},
+                {'name': f'{parts[0]}.port', 'default': 1111, 'min': 1, 'max': 65535},
+                {'name': f'{parts[0]}.username', 'default': w.config_string(w.config_get('irc.server_default.username'))},
+                {'name': f'{parts[0]}.password', 'default': ''},
+                {'name': f'{parts[0]}.ssl', 'default': False},
+                {'name': f'{parts[0]}.autojoin', 'default': 'lichatters'},
+                {'name': f'{parts[0]}.autoconnect', 'default': False},
+                {'name': f'{parts[0]}.autoreconnect', 'default': True},
+                {'name': f'{parts[0]}.autoreconnect_delay', 'default': 60},
+                {'name': f'{parts[0]}.highlight', 'default': 'username'}
+            ])
+            option = w.config_search_option(file, section, name)
+
+    return w.config_option_set(option, value, 1)
+
 
 ### Setup
 if __name__ == '__main__' and import_ok:
@@ -1276,7 +1305,7 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.autoreconnect', 'default': True},
             {'name': 'tynet.autoreconnect_delay', 'default': 60},
             {'name': 'tynet.highlight', 'default': 'username'}
-        ])
+        ], read_cb='config_server_read_cb')
         config_reload_cb('', config_file)
         
         w.hook_command('lichat', 'Prefix for lichat related commands',
