@@ -602,13 +602,13 @@ def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None,
         if ssl == 'off': ssl = False
         try_connect(w_buffer, Server(name=name, username=username, password=evaluate_string(password), host=host, port=port, ssl=ssl))
         config_section(config_file, 'server', [
-            {'name': 'host', 'default': host},
-            {'name': 'port', 'default': port, 'min': 1, 'max': 65535},
-            {'name': 'username', 'default': username},
-            {'name': 'password', 'default': password},
-            {'name': 'ssl', 'default': ssl},
-            {'name': 'autoconnect', 'default': True},
-            {'name': 'autojoin', 'default': ''}
+            {'name': f'{name}.host', 'default': host},
+            {'name': f'{name}.port', 'default': port, 'min': 1, 'max': 65535},
+            {'name': f'{name}.username', 'default': username},
+            {'name': f'{name}.password', 'default': password},
+            {'name': f'{name}.ssl', 'default': ssl},
+            {'name': f'{name}.autoconnect', 'default': True},
+            {'name': f'{name}.autojoin', 'default': ''}
         ])
     elif name not in servers:
         w.prnt(w_buffer, f"{w.prefix('error')} No such server {name}")
