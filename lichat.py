@@ -374,7 +374,10 @@ class Server:
             tags = ['no_highlight', 'log3']
             if name == 'topic':
                 tags.append('irc_topic')
-            buffer = self.show(update, text=f"{name}: {update.text}", tags=tags)
+            text = update.text
+            if 256 < len(text):
+                text = text[:253]+"..."
+            buffer = self.show(update, text=f"{name}: {text}", tags=tags)
             if name == 'topic':
                 w.buffer_set(buffer.buffer, 'title', update.text)
 
