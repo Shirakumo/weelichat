@@ -28,7 +28,7 @@ try:
     from pathlib import Path
     import shlex
     import json
-    import requests
+    import urllib.request
     import socket
     import base64
     import re
@@ -979,22 +979,21 @@ def read_file(data):
 def download_file(data):
     data = json.loads(data)
     try:
-        r = requests.get(data['url'], allow_redirects=True)
-        if r.status_code == 200:
-            data['payload'] = str(base64.b64encode(r.content), 'utf-8')
-            data['content-type'] = r.headers.get('content-type').split(';')[0]
-            match = re.compile('filename="([^"]+)"').search(r.headers.get('content-disposition') or '')
-            if match != None:
-                data['filename'] = match.group(1)
-            else:
-                data['filename'] = data['url'].rsplit('/', 1)[1]
-            
-            buffer = find_buffer(data['server'], data['channel'])
-            if buffer != None:
-                buffer.send(Data, **data)
-            data['payload'] = True
+        r = urllib.request.urlopen(data['url'])
+        data['payload'] = str(base64.b64encode(r.read()), 'utf-8')
+        data['content-type'] = r.headers.get('content-type').split(';')[0]
+        match = re.compile('filename="([^"]+)"').search(r.headers.get('content-disposition') or '')
+        if match != None:
+            data['filename'] = match.group(1)
         else:
-            data['text'] = f"URL unreachable: error {r.status_code}"
+            data['filename'] = data['url'].rsplit('/', 1)[1]
+
+        buffer = find_buffer(data['server'], data['channel'])
+        if buffer != None:
+            buffer.send(Data, **data)
+        data['payload'] = True
+    except urllib.error.HTTPError as e:
+        data['text'] = f"URL unreachable: {e}"
     except Exception as e:
         data['text'] = f"Internal error: {e}"
     return json.dumps(data)
@@ -1024,6 +1023,10 @@ def write_file(data):
 def upload_file(data):
     data = json.loads(data)
     try:
+        # FIXME: try to remove dependency on requests, because
+        # requests -> simplejson -> decimal, which provokes the
+        # MPD_SETMINALLOC issue.
+        import requests
         headers = {'Authorization': f'Client-ID {imgur_client_id}'}
         post = {'type': 'file', 'title': data['filename']}
         files = {}
