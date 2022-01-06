@@ -652,9 +652,14 @@ def try_connect(w_buffer, server):
 @raw_command('connect', '%(lichat_server)', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
 def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None, password=None, ssl=None):
     if name == None:
-        for server in servers:
-            if not servers[server].is_connected():
-                try_connect(w_buffer, servers[server])
+        buf = weechat_buffer_to_representation(w_buffer)
+        if buf is not None:
+            if not buf.server.is_connected():
+                try_connect(w_buffer, buf.server)
+        else:
+            for server in servers:
+                if not servers[server].is_connected():
+                    try_connect(w_buffer, servers[server])
     elif host != None:
         if name in servers:
             w.prnt(w_buffer, f"f{w.prefix('error')} A server of that name already exists.")
