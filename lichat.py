@@ -1203,6 +1203,11 @@ def config_updated(full=False):
 
 def config_option_change_cb(option_name, option):
     config_updated(full=False)
+    if option_name.startswith('server.'):
+        server = option_name.split('.', maxsplit=2)[1]
+        servername = w.config_string(f"lichat.server.{server}.name") or server
+        if servername in servers:
+            w.prnt("", f"{w.prefix('error')}Note that changes to lichat server options currently require reloading the script")
     return w.WEECHAT_RC_OK
 
 def config_section(file, section_name, options, read_cb=''):
