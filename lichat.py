@@ -1180,12 +1180,14 @@ def config_delete_option_cb(section_name, file, section, option):
             del cfg[key]
     return w.WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED
 
-def config_reload_cb(_data, file):
-    w.config_reload(file)
+def config_updated(full=False):
     global imgur_client_id, data_save_directory, data_save_types
     data_save_directory = cfg('behaviour', 'data_save_directory')
     data_save_types = cfg('behaviour', 'data_save_types').split(',')
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
+    if not full:
+        return
+
     for server, sconf in servers_options().items():
         server = w.config_string(sconf['name']) or server
         if server not in servers:
@@ -1198,6 +1200,9 @@ def config_reload_cb(_data, file):
         instance = servers[server]
         if w.config_boolean(sconf['autoconnect']) and not instance.is_connected():
             try_connect('', instance)
+
+def config_option_change_cb(option_name, option):
+    config_updated(full=False)
     return w.WEECHAT_RC_OK
 
 def config_section(file, section_name, options, read_cb=''):
@@ -1213,7 +1218,12 @@ def config_section(file, section_name, options, read_cb=''):
     if section_name in config:
         section = config[section_name]['__section__']
     else:
-        section = w.config_new_section(file, section_name, 1, 1, read_cb, '', '', '', '', '', 'config_create_option_cb', section_name, 'config_delete_option_cb', section_name)
+        section = w.config_new_section(file, section_name, 1, 1,
+                                       read_cb, '',
+                                       '', '', # write
+                                       '', '', # write_default
+                                       'config_create_option_cb', section_name,
+                                       'config_delete_option_cb', section_name)
         config[section_name] = {'__section__': section}
     
     for option in options:
@@ -1225,9 +1235,11 @@ def config_section(file, section_name, options, read_cb=''):
         default = str(option['default'])
         config[section_name][name] = w.config_new_option(file, section, name,
                                                          optype, description,
-                                                         '', min, max,
+                                                         option.get('enum', ''), min, max,
                                                          default, default, 0,
-                                                         '', '', '', '', '', '')
+                                                         '', '', # check_value
+                                                         'config_option_change_cb', f"{section_name}.{name}",
+                                                         '', '') # delete
     return section
 
 
@@ -1264,7 +1276,7 @@ if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
                         SCRIPT_LICENSE, SCRIPT_DESC, '', ''):
         
-        config_file = w.config_new('lichat', 'config_reload_cb', '')
+        config_file = w.config_new('lichat', '', '')
         config_section(config_file, 'behaviour', [
             {'name': 'data_save_directory', 'default': w.info_get('weechat_dir', '')+'/lichat/downloads/',
              'description': f"Where to save uploaded files to."},
@@ -1312,7 +1324,8 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.autoreconnect_delay', 'default': 60},
             {'name': 'tynet.highlight', 'default': 'username'}
         ], read_cb='config_server_read_cb')
-        config_reload_cb('', config_file)
+        w.config_reload(config_file)
+        config_updated(full=True)
         
         w.hook_command('lichat', 'Prefix for lichat related commands',
                        '<command> [<command options>]',
