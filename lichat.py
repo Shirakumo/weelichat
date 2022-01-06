@@ -299,6 +299,11 @@ class Buffer:
         if text is None:
             if isinstance(update, Update):
                 text = update.get('text', f"Update of type {type(update).__name__}")
+                if isinstance(update, UpdateFailure):
+                    origin = self.server.client.origin(update)
+                    if origin != None:
+                        text = f"{text}\n{w.prefix('network')}{w.color('gray')}in regards to {origin}"
+                        tags.append('no_highlight')
             else:
                 text = f"BUG: Supposed to show non-update {update}"
 
