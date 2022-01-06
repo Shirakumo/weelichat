@@ -36,13 +36,38 @@ try:
     import time
     import pylichat
     import inspect
+    import logging
     from pylichat import Client, ConnectionFailed
     from pylichat.update import *
     from pylichat.symbol import kw, li
     import pylichat.wire
+    logger = logging.getLogger('lichat')
 except ImportError as message:
     print('Missing package(s) for %s: %s' % (SCRIPT_NAME, message))
     import_ok = False
+
+logtraceback = False
+
+class WeechatHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            prefix = ""
+            if record.levelno >= logging.ERROR:
+                prefix = w.prefix("error")
+            elif record.levelno < logging.INFO:
+                prefix = w.color("gray")
+
+            if not logtraceback and record.exc_info:
+                # Strip traceback info but leave the exception type & string alone
+                record.exc_info = (record.exc_info[0], record.exc_info[1], None)
+
+            w.prnt_date_tags("", 0,
+                             f"no_highlight,log5,lichat_log,lichat_log_{record.levelname.lower()}",
+                             f"{prefix}{self.format(record)}")
+        except RecursionError:
+            raise
+        except Exception:
+            self.handleError(record)
 
 data_save_directory = ''
 data_save_types = []
@@ -84,8 +109,11 @@ def lichat_buffer_close_cb(_data, w_buffer):
 
 def lichat_socket_cb(name, fd):
     server = servers[name]
-    for update in server.client.recv():
-        server.client.handle(update)
+    try:
+        for update in server.client.recv():
+            server.client.handle(update)
+    except Exception as e:
+       logger.exception("[{name}] error in lichat_socket_cb")
     return w.WEECHAT_RC_OK
 
 def input_prompt_cb(data, item, current_window, w_buffer, extra_info):
@@ -584,7 +612,7 @@ def try_connect(w_buffer, server):
         else:
             w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e}")
     except Exception as e:
-        w.prnt(w_buffer, f"[{server.name}] Unexpected failure: {e}")
+        logger.exception(f"[{server.name}] Failed to connect to {server.host}:{server.port} {'with SSL' if server.ssl else ''}")
 
 @raw_command('connect', '%(lichat_server)', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
 def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None, password=None, ssl=None):
@@ -1181,10 +1209,14 @@ def config_delete_option_cb(section_name, file, section, option):
     return w.WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED
 
 def config_updated(full=False):
-    global imgur_client_id, data_save_directory, data_save_types
+    logger.debug(f"config_updated({full=})")
+    global imgur_client_id, data_save_directory, data_save_types, logtraceback
     data_save_directory = cfg('behaviour', 'data_save_directory')
     data_save_types = cfg('behaviour', 'data_save_types').split(',')
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
+    logging.root.setLevel(cfg('behaviour', 'loglevel', str, 'WARNING'))
+    logtraceback = cfg('behaviour', 'logtraceback', bool, False)
+
     if not full:
         return
 
@@ -1202,6 +1234,7 @@ def config_updated(full=False):
             try_connect('', instance)
 
 def config_option_change_cb(option_name, option):
+    logger.debug(f"config_option_change_cb({option_name}) -> {w.config_string(option) or w.config_integer(option)}")
     config_updated(full=False)
     if option_name.startswith('server.'):
         server = option_name.split('.', maxsplit=2)[1]
@@ -1280,6 +1313,7 @@ def config_server_read_cb(data, file, section, name, value):
 if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
                         SCRIPT_LICENSE, SCRIPT_DESC, '', ''):
+        logging.basicConfig(handlers=[WeechatHandler()], force=True)
         
         config_file = w.config_new('lichat', '', '')
         config_section(config_file, 'behaviour', [
@@ -1290,7 +1324,12 @@ if __name__ == '__main__' and import_ok:
             {'name': 'imgur_client_id', 'default': '',
              'description': f"An imgur.com client ID token. If set, will upload compatible data files to imgur and replace with a link instead of saving the file locally."},
             {'name': 'highlight', 'default': '',
-             'description': f"A comma-separated list of words to highlight in any Lichat buffer."}
+             'description': f"A comma-separated list of words to highlight in any Lichat buffer."},
+            # can also be CRITICAL but that would hide too much...
+            {'name': 'loglevel', 'default': 'WARNING', 'enum': 'ERROR|WARNING|INFO|DEBUG',
+             'optype': 'integer',
+             'description': f"weelichat log level"},
+            {'name': 'logtraceback', 'default': False, 'description': "Include exception traceback in error messages"}
         ])
         config_section(config_file, 'server_default', [
             {'name': 'name', 'default': '',
@@ -1363,7 +1402,7 @@ if __name__ == '__main__' and import_ok:
         w.hook_completion('lichat_emote', 'complete :emotes: for Lichat', 'emote_completion_cb', '')
         w.hook_command_run('/input complete_*', 'input_complete_cb', '')
         
-        w.prnt("", "lichat.py\tis loaded ok")
+        w.prnt("", "lichat.py is loaded ok")
 
 ## TODO: buffer sending to avoid getting throttled by the server.
 ## TODO: lag estimation
