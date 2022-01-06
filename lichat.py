@@ -103,7 +103,8 @@ def lichat_buffer_input_cb(_data, w_buffer, input_data):
 
 def lichat_buffer_close_cb(_data, w_buffer):
     buffer = weechat_buffer_to_representation(w_buffer)
-    buffer.send(Leave)
+    if buffer.server.is_connected():
+        buffer.send(Leave)
     buffer.delete()
     return w.WEECHAT_RC_OK
 
@@ -1308,12 +1309,23 @@ def config_server_read_cb(data, file, section, name, value):
 
     return w.config_option_set(option, value, 1)
 
+def shutdown_cb():
+    logger.info("Unloading script")
+    for name, server in servers.items():
+        if server.is_connected():
+            logger.info(f"[{server.name}] Disconnecting")
+            try:
+                server.disconnect()
+            except:
+                logger.exception(f"[server.name] Error while disconnecting")
+
+    return w.WEECHAT_RC_OK
 
 ### Setup
 if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
-                        SCRIPT_LICENSE, SCRIPT_DESC, '', ''):
         logging.basicConfig(handlers=[WeechatHandler()], force=True)
+                        SCRIPT_LICENSE, SCRIPT_DESC, 'shutdown_cb', ''):
         
         config_file = w.config_new('lichat', '', '')
         config_section(config_file, 'behaviour', [
