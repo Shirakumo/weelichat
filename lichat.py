@@ -538,7 +538,7 @@ class Server:
     def show(self, update=None, text=None, kind='action', tags=[], buffer=None):
         if buffer == None and isinstance(update, UpdateFailure):
             origin = self.client.origin(update)
-            if origin != None and not isinstance(origin, Leave):
+            if origin != None and not isinstance(origin, Leave) and not isinstance(origin, Join):
                 buffer = origin.get('channel', None)
         if buffer == None and update != None:
             buffer = update.get('channel', None)
@@ -609,6 +609,7 @@ def handle_failure(buffer):
         def wrapper(_client, _prev, update):
             if isinstance(update, Failure):
                 buffer.show(update, kind='error')
+                raise pylichat.SwallowUpdate()
             else:
                 f(update)
         return wrapper
