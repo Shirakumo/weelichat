@@ -427,7 +427,7 @@ class Server:
             text = update.text
             if 256 < len(text):
                 text = text[:253]+"..."
-            buffer = self.show(update, text=f"{name}: {text}", tags=tags)
+            buffer = self.show(update, text=f"{name}: {text}", tags=tags, kind='network')
             if name == 'topic':
                 w.buffer_set(buffer.buffer, 'title', update.text)
 
@@ -435,7 +435,7 @@ class Server:
             buffer = self.show(update, text=f"joined {update.channel}", kind='join', tags=['irc_join', 'no_highlight', 'log4'])
             buffer.join(update['from'])
             if update.channel == self.client.servername:
-                buffer.show(text=f"Supported extensions: {', '.join(self.client.extensions)}")
+                buffer.show(text=f"Supported extensions: {', '.join(self.client.extensions)}", kind='network')
 
         def on_leave(client, update):
             buffer = self.show(update, text=f"left {update.channel}", kind='quit', tags=['irc_part', 'no_highlight', 'log4'])
