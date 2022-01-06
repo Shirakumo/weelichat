@@ -121,8 +121,11 @@ def lichat_socket_cb(name, fd):
     try:
         for update in server.client.recv():
             server.client.handle(update)
+    except pylichat.ConnectionLost:
+        logger.info(f"[{name}] connection lost", exc_info=True)
+        server.disconnected_error()
     except Exception as e:
-       logger.exception("[{name}] error in lichat_socket_cb")
+        logger.exception(f"[{name}] error in lichat_socket_cb")
     return w.WEECHAT_RC_OK
 
 def input_prompt_cb(data, item, current_window, w_buffer, extra_info):
@@ -489,6 +492,10 @@ class Server:
             self.hook = None
             self.client.disconnect()
 
+    def disconnected_error(self):
+        logger.debug(f"[{self.name}] disconnected_error")
+        self.client.handle(pylichat.update.make_instance(pylichat.update.Disconnect))
+
     def reconnect(self):
         if self.hook != None: return
         try:
@@ -505,10 +512,18 @@ class Server:
         del servers[name]
 
     def send(self, type, **args):
-        return self.client.send(type, **args)
+        try:
+            return self.client.send(type, **args)
+        except pylichat.ConnectionLost:
+            logger.info(f"[{self.name}] connection lost", exc_info=True)
+            self.disconnected_error()
 
     def send_cb(self, cb, type, **args):
-        return self.client.send_callback(cb, type, **args)
+        try:
+            return self.client.send_callback(cb, type, **args)
+        except pylichat.ConnectionLost:
+            logger.info(f"[{self.name}] connection lost", exc_info=True)
+            self.disconnected_error()
 
     def show(self, update=None, text=None, kind='action', tags=[], buffer=None):
         if buffer == None and isinstance(update, UpdateFailure):
