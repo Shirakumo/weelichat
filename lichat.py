@@ -185,6 +185,11 @@ def edit_buffer(w_buffer, matcher, new_text):
         w.hdata_update(h_line_data, data, {'message': text})
     return True
 
+def buffer_backfill_timeout_cb(data, _remaining):
+    buffer = weechat_buffer_to_representation(data)
+    buffer.backfill_timeout()
+    return w.WEECHAT_RC_OK
+
 class Buffer:
     name = None
     server = None
@@ -222,7 +227,21 @@ class Buffer:
         w.buffer_set(self.buffer, 'localvar_set_lichat_complete_prefix', '')
         server.buffers[channel] = self
 
+        self.backfill_time = None
+        self.backfill_deferred = []
+        self.backfill_timeout_hook = None
+        if server.client.is_supported('shirakumo-backfill'):
+            self.backfill_state = 'wait'
+            self.backfill_timer()
+        else:
+            self.backfill_state = 'never'
+
     def disconnect(self, show=True):
+        if self.backfill_state != 'never':
+            self.backfill_flush()
+            self.backfill_time = None
+            self.backfill_state = 'part'
+
         if show:
             self.show(text='Disconnected.', kind='network')
         w.nicklist_remove_all(self.buffer)
@@ -281,6 +300,65 @@ class Buffer:
     def display(self):
         w.buffer_set(self.buffer, 'display', '1')
 
+    def backfill_message(self, text):
+        w.prnt_date_tags(self.buffer, 0, "no_log", f"\t\t---------------- {text} ----------------")
+
+    def backfill_timer(self):
+        if self.backfill_timeout_hook:
+            w.unhook(self.backfill_timeout_hook)
+        self.backfill_timeout_hook = w.hook_timer(cfg('behaviour', 'backfill_timeout', int, 1000),
+                                                  0, 1, 'buffer_backfill_timeout_cb', self.buffer)
+
+    def backfill_timeout(self):
+        if self.backfill_state in ['wait', 'join']:
+            self.backfill_state = 'none'
+        elif self.backfill_state == 'backfill':
+            self.backfill_state = 'done'
+        self.backfill_flush()
+
+    def backfill_flush(self):
+        """Flush updates deferred by backfill"""
+        if self.backfill_timeout_hook:
+            w.unhook(self.backfill_timeout_hook)
+        if self.backfill_state == 'none':
+            self.backfill_message("No backfill")
+        elif self.backfill_state == 'done':
+            self.backfill_message("End of backfill")
+        self.backfill_state = 'flushed'
+
+        for args in self.backfill_deferred:
+            self.show(**args)
+        self.backfill_deferred.clear()
+
+    def backfill_statemachine(self, update):
+        """Update the backfill state machine.
+
+Returns True if show() should defer the update."""
+        if self.backfill_state != 'never':
+            if isinstance(update, Join) and update['from'] == self.server.client.username:
+                if self.backfill_time is None and self.backfill_state in ['wait', 'part']:
+                    self.backfill_state = 'join'
+                    self.backfill_time = update['clock']
+                    self.backfill_timer()
+            elif self.backfill_state == 'join':
+                if update['clock'] < self.backfill_time:
+                    self.backfill_message("Backfill")
+                    self.backfill_state = 'backfill'
+                    self.backfill_timer()
+                elif not isinstance(update, SetChannelInfo):
+                    self.backfill_state = 'none'
+                    self.backfill_flush()
+            elif self.backfill_state == 'backfill':
+                if update['clock'] > self.backfill_time:
+                    self.backfill_state = 'done'
+                    self.backfill_flush()
+                else:
+                    self.backfill_timer()
+
+            if self.backfill_state in ['wait', 'join']:
+                return True
+        return False
+
     def show(self, update=None, text=None, kind='action', tags=[]):
         time = 0
         prefix_color = ""
@@ -288,6 +366,11 @@ class Buffer:
         if update is None:
             update = {'from': self.server.client.servername}
         else:
+            if self.backfill_statemachine(update):
+                logger.debug(f"Update deferred by backfill {update}")
+                self.backfill_deferred.append({'update': update, 'text': text, 'kind': kind, 'tags': tags})
+                return self
+
             time = update.unix_clock()
             tags.append(f"lichat_type_{update.__class__.__name__.lower()}")
             if update.get('id'):
@@ -1386,6 +1469,8 @@ if __name__ == '__main__' and import_ok:
              'description': f"An imgur.com client ID token. If set, will upload compatible data files to imgur and replace with a link instead of saving the file locally."},
             {'name': 'highlight', 'default': '',
              'description': f"A comma-separated list of words to highlight in any Lichat buffer."},
+            {'name': 'backfill_timeout', 'default': 1000, 'min': 100, 'max': 3600000,
+             'description': "Timeout for backfill detection in milliseconds. Note that the timeout is reset upon any visible updates arriving in the process."},
             # can also be CRITICAL but that would hide too much...
             {'name': 'loglevel', 'default': 'WARNING', 'enum': 'ERROR|WARNING|INFO|DEBUG',
              'optype': 'integer',
