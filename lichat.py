@@ -1250,9 +1250,6 @@ def config_updated(full=False):
                    host=w.config_string(sconf['host']),
                    port=w.config_integer(sconf['port']),
                    ssl=w.config_boolean(sconf['ssl']))
-        instance = servers[server]
-        if w.config_boolean(sconf['autoconnect']) and not instance.is_connected():
-            try_connect('', instance)
 
 def config_option_change_cb(option_name, option):
     logger.debug(f"config_option_change_cb({option_name}) -> {w.config_string(option) or w.config_integer(option)}")
@@ -1437,6 +1434,12 @@ if __name__ == '__main__' and import_ok:
         w.hook_command_run('/input complete_*', 'input_complete_cb', '')
         
         logger.info("Loaded script")
+
+        for server, sconf in servers_options().items():
+            server = w.config_string(sconf['name']) or server
+            instance = servers[server]
+            if w.config_boolean(sconf['autoconnect']) and not instance.is_connected():
+                try_connect('', instance)
 
 ## TODO: buffer sending to avoid getting throttled by the server.
 ## TODO: lag estimation
