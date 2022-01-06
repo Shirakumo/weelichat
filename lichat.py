@@ -365,11 +365,16 @@ class Server:
         def on_disconnect(client, update):
             for channel in self.buffers:
                 self.buffers[channel].disconnect()
+            if self.timeout != None:
+                w.unhook(self.timeout)
+                self.timeout = None
             if self.hook != None:
                 w.unhook(self.hook)
                 self.hook = None
                 if self.config('autoreconnect', bool):
-                    self.reconnect()
+                    cooldown = max(1, self.config('autoreconnect_delay', int))
+                    self.show(text=f"Reconnecting in {cooldown} seconds...", kind='network')
+                    w.hook_timer(cooldown * 1000, 1, 1, 'reconnect_cb', self.name)
         
         def on_misc(client, update):
             if self.timeout != None:
@@ -503,8 +508,8 @@ class Server:
             self.connect()
         except:
             cooldown = max(1, self.config('autoreconnect_delay', int))
-            self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.")
-            w.hook_timer(cooldown, 1, 1, 'reconnect_cb', self.name)
+            self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.", kind='network')
+            w.hook_timer(cooldown * 1000, 1, 1, 'reconnect_cb', self.name)
 
     def delete(self):
         self.client.disconnect()
