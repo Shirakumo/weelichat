@@ -37,6 +37,7 @@ try:
     import pylichat
     import inspect
     import logging
+    import logging.handlers
     from pylichat import Client, ConnectionFailed
     from pylichat.update import *
     from pylichat.symbol import kw, li
@@ -47,6 +48,8 @@ except ImportError as message:
     import_ok = False
 
 logtraceback = False
+logfilehandler = None
+logweehandler = None
 
 class WeechatHandler(logging.Handler):
     def emit(self, record):
@@ -59,11 +62,16 @@ class WeechatHandler(logging.Handler):
 
             if not logtraceback and record.exc_info:
                 # Strip traceback info but leave the exception type & string alone
+                bk = record.exc_info[2]
                 record.exc_info = (record.exc_info[0], record.exc_info[1], None)
+                fmt = self.format(record)
+                record.exc_info = (record.exc_info[0], record.exc_info[1], bk)
+            else:
+                fmt = self.format(record)
 
             w.prnt_date_tags("", 0,
                              f"no_highlight,log5,lichat_log,lichat_log_{record.levelname.lower()}",
-                             f"{prefix}{self.format(record)}")
+                             f"{prefix}{fmt}")
         except RecursionError:
             raise
         except Exception:
@@ -1211,12 +1219,24 @@ def config_delete_option_cb(section_name, file, section, option):
 
 def config_updated(full=False):
     logger.debug(f"config_updated({full=})")
-    global imgur_client_id, data_save_directory, data_save_types, logtraceback
+    global imgur_client_id, data_save_directory, data_save_types, logtraceback, logfilehandler
     data_save_directory = cfg('behaviour', 'data_save_directory')
     data_save_types = cfg('behaviour', 'data_save_types').split(',')
     imgur_client_id = cfg('behaviour', 'imgur_client_id')
-    logging.root.setLevel(cfg('behaviour', 'loglevel', str, 'WARNING'))
+    logweehandler.setLevel(cfg('behaviour', 'loglevel', str, 'WARNING'))
     logtraceback = cfg('behaviour', 'logtraceback', bool, False)
+    if cfg('behaviour', 'logfile', bool, False):
+        if logfilehandler is None:
+            logfilehandler = logging.handlers.RotatingFileHandler(w.string_eval_path_home("%h/lichat.log", '', '', ''),
+                                                                  maxBytes=4000000, backupCount=8,
+                                                                  encoding='utf-8')
+            logfilehandler.setFormatter(logging.Formatter("%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s",
+                                                          datefmt='%a, %d %b %Y %H:%M:%S %z'))
+            logging.root.addHandler(logfilehandler)
+    else:
+        if logfilehandler is not None:
+            logging.root.removeHandler(logfilehandler)
+            logfilehandler = None
 
     if not full:
         return
@@ -1324,8 +1344,9 @@ def shutdown_cb():
 ### Setup
 if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
-        logging.basicConfig(handlers=[WeechatHandler()], force=True)
                         SCRIPT_LICENSE, SCRIPT_DESC, 'shutdown_cb', ''):
+        logweehandler = WeechatHandler(level=logging.WARNING)
+        logging.basicConfig(handlers=[logweehandler], force=True, level=logging.DEBUG)
         
         config_file = w.config_new('lichat', '', '')
         config_section(config_file, 'behaviour', [
@@ -1341,7 +1362,8 @@ if __name__ == '__main__' and import_ok:
             {'name': 'loglevel', 'default': 'WARNING', 'enum': 'ERROR|WARNING|INFO|DEBUG',
              'optype': 'integer',
              'description': f"weelichat log level"},
-            {'name': 'logtraceback', 'default': False, 'description': "Include exception traceback in error messages"}
+            {'name': 'logtraceback', 'default': False, 'description': "Include exception traceback in error messages"},
+            {'name': 'logfile', 'default': False, 'description': 'also log all messages (DEBUG) to file (%h/lichat.log)'}
         ])
         config_section(config_file, 'server_default', [
             {'name': 'name', 'default': '',
@@ -1414,7 +1436,7 @@ if __name__ == '__main__' and import_ok:
         w.hook_completion('lichat_emote', 'complete :emotes: for Lichat', 'emote_completion_cb', '')
         w.hook_command_run('/input complete_*', 'input_complete_cb', '')
         
-        w.prnt("", "lichat.py is loaded ok")
+        logger.info("Loaded script")
 
 ## TODO: buffer sending to avoid getting throttled by the server.
 ## TODO: lag estimation
