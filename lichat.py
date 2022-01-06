@@ -1231,7 +1231,7 @@ def config_section(file, section_name, options, read_cb=''):
         optype = option.get('optype', value_type(option['default']))
         description = option.get('description', f'({optype})')
         min = option.get('min', 0)
-        max = option.get('max', 0)
+        max = option.get('max', 65535)
         default = str(option['default'])
         config[section_name][name] = w.config_new_option(file, section, name,
                                                          optype, description,
@@ -1263,7 +1263,7 @@ def config_server_read_cb(data, file, section, name, value):
                 {'name': f'{parts[0]}.autojoin', 'default': 'lichatters'},
                 {'name': f'{parts[0]}.autoconnect', 'default': False},
                 {'name': f'{parts[0]}.autoreconnect', 'default': True},
-                {'name': f'{parts[0]}.autoreconnect_delay', 'default': 60},
+                {'name': f'{parts[0]}.autoreconnect_delay', 'min': 1, 'default': 60},
                 {'name': f'{parts[0]}.highlight', 'default': 'username'}
             ])
             option = w.config_search_option(file, section, name)
@@ -1306,7 +1306,7 @@ if __name__ == '__main__' and import_ok:
              'description': f"Whether to automatically connect to this server when the lichat script is loaded."},
             {'name': 'autoreconnect', 'default': True,
              'description': f"Whether to automatically reconnect when the client disconnects for some reason."},
-            {'name': 'autoreconnect_delay', 'default': 60,
+            {'name': 'autoreconnect_delay', 'min': 1, 'default': 60,
              'description': f"How long to wait between reconnection attempts, in seconds."},
             {'name': 'highlight', 'default': 'username',
              'description': f"A comma-separated list of words to highlight in any buffer for this server. The special word 'username' will be replaced with the username used for this server."}
@@ -1321,7 +1321,7 @@ if __name__ == '__main__' and import_ok:
             {'name': 'tynet.autojoin', 'default': 'lichatters'},
             {'name': 'tynet.autoconnect', 'default': False},
             {'name': 'tynet.autoreconnect', 'default': True},
-            {'name': 'tynet.autoreconnect_delay', 'default': 60},
+            {'name': 'tynet.autoreconnect_delay', 'min': 1, 'default': 60},
             {'name': 'tynet.highlight', 'default': 'username'}
         ], read_cb='config_server_read_cb')
         w.config_reload(config_file)
