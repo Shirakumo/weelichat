@@ -433,10 +433,11 @@ class Server:
     hook = None
     timeout = None
 
-    def __init__(self, name=None, username=None, password=None, host='chat.tymoon.eu', port=1111, ssl=False):
+    def __init__(self, name=None, key=None, username=None, password=None, host='chat.tymoon.eu', port=1111, ssl=False):
         client = Client(username, password)
         self.buffers = pylichat.toolkit.CaseInsensitiveDict()
         self.name = name
+        self.key = key
         self.client = client
         self.host = host
         self.port = port
@@ -448,6 +449,7 @@ class Server:
 
         def on_connect(client, update):
             for channel in self.config('autojoin', str, '').split('  '):
+                logger.debug(f"autojoining {channel!r}")
                 self.send(Join, channel=channel)
 
         def on_disconnect(client, update):
@@ -559,7 +561,7 @@ class Server:
         servers[name] = self
 
     def config(self, key, type=str, default=None, evaluate=False):
-        return cfg('server', self.name+'.'+key, type, default, evaluate)
+        return cfg('server', self.key+'.'+key, type, default, evaluate)
 
     def highlight(self):
         parts = self.config('highlight', str, 'username').split(',') + cfg('behaviour', 'highlight', str, '').split(',')
@@ -1355,10 +1357,11 @@ def config_updated(full=False):
     if not full:
         return
 
-    for server, sconf in servers_options().items():
-        server = w.config_string(sconf['name']) or server
+    for serverkey, sconf in servers_options().items():
+        server = w.config_string(sconf['name']) or serverkey
         if server not in servers:
             Server(name=server,
+                   key=serverkey,
                    username=w.config_string(sconf['username']),
                    password=evaluate_string(w.config_string(sconf['password'])),
                    host=w.config_string(sconf['host']),
@@ -1369,8 +1372,8 @@ def config_option_change_cb(option_name, option):
     logger.debug(f"config_option_change_cb({option_name}) -> {w.config_string(option) or w.config_integer(option)}")
     config_updated(full=False)
     if option_name.startswith('server.'):
-        server = option_name.split('.', maxsplit=2)[1]
-        servername = w.config_string(f"lichat.server.{server}.name") or server
+        serverkey = option_name.split('.', maxsplit=2)[1]
+        servername = w.config_string(f"lichat.server.{serverkey}.name") or serverkey
         if servername in servers:
             w.prnt("", f"{w.prefix('error')}Note that changes to lichat server options currently require reloading the script")
     return w.WEECHAT_RC_OK
