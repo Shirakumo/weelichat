@@ -1334,7 +1334,7 @@ def config_delete_option_cb(section_name, file, section, option):
     return w.WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED
 
 def config_updated(full=False):
-    logger.debug(f"config_updated({full=})")
+    logger.debug(f"config_updated(full={full})")
     global imgur_client_id, data_save_directory, data_save_types, logtraceback, logfilehandler
     data_save_directory = cfg('behaviour', 'data_save_directory')
     data_save_types = cfg('behaviour', 'data_save_types').split(',')
