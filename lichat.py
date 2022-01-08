@@ -1460,7 +1460,7 @@ if __name__ == '__main__' and import_ok:
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
                         SCRIPT_LICENSE, SCRIPT_DESC, 'shutdown_cb', ''):
         logweehandler = WeechatHandler(level=logging.WARNING)
-        logging.basicConfig(handlers=[logweehandler], force=True, level=logging.DEBUG)
+        logging.basicConfig(handlers=[logweehandler], level=logging.DEBUG)
         
         config_file = w.config_new('lichat', '', '')
         config_section(config_file, 'behaviour', [
