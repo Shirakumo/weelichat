@@ -144,9 +144,16 @@ def reconnect_cb(data, _remaining):
 def timeout_cb(data, _remaining):
     server = servers.get(data, None)
     if server != None:
-        server.show(text="Timed out, reconnecting...")
-        server.disconnect()
-        server.reconnect()
+        if server.ping_sent_at is None:
+            logger.debug(f"[{server.name}] timeout, sending ping")
+            server.ping_sent_at = time.monotonic()
+            server.send(Ping)
+            server.timeout = w.hook_timer(1000*30, 1, 1, 'timeout_cb', server.name)
+        else:
+            logger.debug(f"[{server.name}] timeout 2, reconnecting")
+            server.show(text="Timed out, reconnecting...", kind='network')
+            server.disconnect()
+            server.reconnect()
     return w.WEECHAT_RC_OK
 
 def format_alist(list, key_separator=': ', entry_separator='\n'):
@@ -442,6 +449,7 @@ class Server:
         self.host = host
         self.port = port
         self.ssl = ssl
+        self.ping_sent_at = None
         
         emote_dir = w.info_get('weechat_dir', '')+'/lichat/emotes/'+self.host+'/'
         w.mkdir_parents(emote_dir, 0o755)
@@ -475,6 +483,13 @@ class Server:
             
             if isinstance(update, Failure):
                 self.show(update, kind='error', tags=['irc_error', 'log3'])
+
+            if self.ping_sent_at is not None and isinstance(update, Pong):
+                delta = time.monotonic() - self.ping_sent_at
+                logger.debug(f"Ping reply received after {delta} seconds")
+                if delta > 1.0:
+                    self.show(text=f"Ping reply received after {delta:.4f} seconds", kind='network')
+                self.ping_sent_at = None
 
         def on_message(client, update):
             buffer = self.show(update, kind='text', tags=['notify_message', 'irc_privmsg', 'log1'])
