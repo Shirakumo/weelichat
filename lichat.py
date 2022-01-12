@@ -559,6 +559,12 @@ class Server:
             for user in update.users:
                 buffer.join(user)
 
+        def on_backfill(client, update):
+            buffer = self.buffers[update.channel]
+            if buffer.backfill_state == 'backfill':
+                buffer.backfill_state = 'done'
+                buffer.backfill_flush()
+
         client.add_handler(Connect, on_connect)
         client.add_handler(Disconnect, on_disconnect)
         client.add_handler(Update, on_misc)
@@ -573,6 +579,7 @@ class Server:
         client.add_handler(React, on_react)
         client.add_handler(Users, on_users)
         client.add_handler(SetChannelInfo, on_channel_info)
+        client.add_handler(Backfill, on_backfill)
         servers[name] = self
 
     def config(self, key, type=str, default=None, evaluate=False):
