@@ -198,17 +198,12 @@ def buffer_backfill_timeout_cb(data, _remaining):
     return w.WEECHAT_RC_OK
 
 class Buffer:
-    name = None
-    server = None
-    buffer = None
-    channel = None
-    nicklist = None
-
     def __init__(self, server, channel, name=None):
         if name == None: name = channel
         self.name = name
         self.server = server
         self.channel = channel
+        self.nicklist = None
         self.buffer = w.buffer_new(self.w_name(),
                                    'lichat_buffer_input_cb', '',
                                    'lichat_buffer_close_cb', '')
@@ -434,12 +429,6 @@ Returns True if show() should defer the update."""
         return edit_buffer(self.buffer, matcher, text)
 
 class Server:
-    name = None
-    client = None
-    buffers = {}
-    hook = None
-    timeout = None
-
     def __init__(self, name=None, key=None, username=None, password=None, host='chat.tymoon.eu', port=1111, ssl=False):
         client = Client(username, password)
         self.buffers = pylichat.toolkit.CaseInsensitiveDict()
@@ -449,6 +438,8 @@ class Server:
         self.host = host
         self.port = port
         self.ssl = ssl
+        self.hook = None
+        self.timeout = None
         self.ping_sent_at = None
         
         emote_dir = w.info_get('weechat_dir', '')+'/lichat/emotes/'+self.host+'/'
