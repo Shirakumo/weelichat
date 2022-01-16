@@ -23,6 +23,7 @@ except ImportError:
     import_ok = False
 
 try:
+    from collections import deque
     from functools import wraps
     from inspect import signature
     from pathlib import Path
@@ -234,9 +235,11 @@ class Buffer:
         self.backfill_timeout_hook = None
         if server.client.is_supported('shirakumo-backfill'):
             self.backfill_state = 'wait'
+            self.recent_updates = deque()
             self.backfill_timer()
         else:
             self.backfill_state = 'never'
+            self.recent_updates = None
 
     def disconnect(self, show=True):
         if self.backfill_state != 'never':
@@ -361,6 +364,51 @@ Returns True if show() should defer the update."""
                 return True
         return False
 
+    def backfill_deduplicate(self, update):
+        """Backfill deduplication.
+
+Returns True if show() should skip displaying the update."""
+
+        if (self.backfill_state == 'backfill'
+            and len(self.recent_updates) > 0
+            and update.get('clock', 0) <= self.recent_updates[-1].get('clock')):
+            # This backfill update predates the most recent update
+            # we've seen, check the uncertainty window
+
+            if update.get('clock', 0) >= self.recent_updates[0].get('clock'):
+                # This backfill update is within the uncertainty
+                # window, compare it to all recently seen updates
+
+                for ru in self.recent_updates:
+                    if (ru.get('clock') == update.get('clock')
+                        and ru.get('from') == update.get('from')
+                        # workaround for ex-lichat currently returning backfill with str ids
+                        and str(ru.get('id')) == str(update.get('id'))):
+
+                        # We've already seen this backfill update, skip it
+                        logger.debug(f"Skipping update; recently seen {update}")
+                        return True
+            else:
+                # This backfill update predates the start of recent_updates, skip it
+                logger.debug(f"Skipping update; predates recently seen {update}")
+                return True
+
+        # Store recently seen updates
+        if (self.backfill_state != 'none'
+            and update.get('clock')
+            and (len(self.recent_updates) == 0
+                 or update.get('clock') >= self.recent_updates[0].get('clock'))):
+
+            self.recent_updates.append(update)
+
+            # Clean up the queue
+            while (len(self.recent_updates) > 1
+                   and (len(self.recent_updates) > cfg('behaviour', 'backfill_window_count', int, 255)
+                        or (self.recent_updates[0].get('clock') < update.get('clock')
+                            - cfg('behaviour', 'backfill_window_time', int, 30)))):
+                self.recent_updates.popleft()
+        return False
+
     def show(self, update=None, text=None, kind='action', tags=[]):
         time = 0
         prefix_color = ""
@@ -371,6 +419,9 @@ Returns True if show() should defer the update."""
             if self.backfill_statemachine(update):
                 logger.debug(f"Update deferred by backfill {update}")
                 self.backfill_deferred.append({'update': update, 'text': text, 'kind': kind, 'tags': tags})
+                return self
+
+            if self.backfill_deduplicate(update):
                 return self
 
             time = update.unix_clock()
@@ -1487,6 +1538,10 @@ if __name__ == '__main__' and import_ok:
              'description': f"A comma-separated list of words to highlight in any Lichat buffer."},
             {'name': 'backfill_timeout', 'default': 1000, 'min': 100, 'max': 3600000,
              'description': "Timeout for backfill detection in milliseconds. Note that the timeout is reset upon any visible updates arriving in the process."},
+            {'name': 'backfill_window_count', 'default': 255, 'min': 1, 'max': 65535,
+             'description': "For tracking whether an update has already been seen, how many recent updates should be stored (per channel)?"},
+            {'name': 'backfill_window_time', 'default': 30, 'min': 2, 'max': 65535,
+             'description': "For tracking whether an update has already been seen, how long should updates be stored (seconds)?"},
             # can also be CRITICAL but that would hide too much...
             {'name': 'loglevel', 'default': 'WARNING', 'enum': 'ERROR|WARNING|INFO|DEBUG',
              'optype': 'integer',
