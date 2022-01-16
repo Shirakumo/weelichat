@@ -696,10 +696,18 @@ class Server:
         try:
             self.show(text='Reconnecting...', kind='network', show_source=False)
             self.connect()
-        except:
-            cooldown = max(1, self.config('autoreconnect_delay', int))
-            self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.", kind='network', show_source=False)
-            w.hook_timer(cooldown * 1000, 1, 1, 'reconnect_cb', self.name)
+        except ConnectionFailed as e:
+            self.show(text=f"Reconnect failed: {e.update.text}", kind='error', show_source=False)
+            if self.config('autoreconnect', bool):
+                if (isinstance(e.update, InvalidPassword)
+                    or isinstance(e.update, NoSuchProfile)
+                    or isinstance(e.update, BadName)
+                    or isinstance(e.update, IncompatibleVersion)):
+                    # don't try to reconnect again under sufficiently bad conditions
+                    return
+                cooldown = max(1, self.config('autoreconnect_delay', int))
+                self.show(text=f"Reconnecting in {cooldown} seconds...", kind='network', show_source=False)
+                w.hook_timer(cooldown * 1000, 1, 1, 'reconnect_cb', self.name)
 
     def delete(self):
         self.client.disconnect()
@@ -822,15 +830,15 @@ def try_connect(w_buffer, server):
         server.connect()
     except ConnectionFailed as e:
         if isinstance(e.update, InvalidPassword):
-            w.prnt(w_buffer, f"[{server.name}] The password is invalid!")
+            w.prnt(w_buffer, f"{w.prefix('error')}[{server.name}] The password is invalid!")
         elif isinstance(e.update, NoSuchProfile):
-            w.prnt(w_buffer, f"[{server.name}] The given username is not registered and does not require a password!")
+            w.prnt(w_buffer, f"{w.prefix('error')}[{server.name}] The given username is not registered and does not require a password!")
         elif isinstance(e.update, TooManyConnections):
-            w.prnt(w_buffer, f"[{server.name}] The server has too many connections and refused yours.")
+            w.prnt(w_buffer, f"{w.prefix('error')}[{server.name}] The server has too many connections and refused yours.")
         elif isinstance(e.update, TextUpdate):
-            w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e.update.text}")
+            w.prnt(w_buffer, f"{w.prefix('error')}[{server.name}] Failed to connect: {e.update.text}")
         else:
-            w.prnt(w_buffer, f"[{server.name}] Failed to connect: {e}")
+            w.prnt(w_buffer, f"{w.prefix('error')}[{server.name}] Failed to connect: {e}")
     except Exception as e:
         logger.exception(f"[{server.name}] Failed to connect to {server.host}:{server.port} {'with SSL' if server.ssl else ''}")
 
