@@ -409,7 +409,7 @@ Returns True if show() should skip displaying the update."""
                 self.recent_updates.popleft()
         return False
 
-    def show(self, update=None, text=None, kind='action', tags=[]):
+    def show(self, update=None, text=None, kind='action', tags=[], show_source=True):
         time = 0
         prefix_color = ""
 
@@ -418,7 +418,7 @@ Returns True if show() should skip displaying the update."""
         else:
             if self.backfill_statemachine(update):
                 logger.debug(f"Update deferred by backfill {update}")
-                self.backfill_deferred.append({'update': update, 'text': text, 'kind': kind, 'tags': tags})
+                self.backfill_deferred.append({'update': update, 'text': text, 'kind': kind, 'tags': tags, 'show_source': show_source})
                 return self
 
             if self.backfill_deduplicate(update):
@@ -448,16 +448,26 @@ Returns True if show() should skip displaying the update."""
             prefix_color = w.color(w.info_get("nick_color_name", update['from']))
 
         tags = ','.join(tags)
-        source = f"{prefix_color}{update['from']}"
+        source = f"{prefix_color}{update.get('from', '')}{w.color('reset')}"
 
         if update.get('bridge'):
-            source = f"{source}{w.color('reset')}*"
+            source = f"{source}*"
+
+        if show_source is False:
+            source = ""
 
         if kind == 'text':
             w.prnt_date_tags(self.buffer, time, tags, f"{source}\t{text}")
             w.buffer_set(self.buffer, 'hotlist', '2')
         else:
-            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}{w.color('reset')}: {text}")
+            sep = ""
+            if len(source) > 0:
+                if show_source == 'bare':
+                    sep = " "
+                else:
+                    sep = ": "
+
+            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}{sep}{text}")
             w.buffer_set(self.buffer, 'hotlist', '1')
         return self
 
@@ -684,7 +694,7 @@ class Server:
             logger.info(f"[{self.name}] connection lost", exc_info=True)
             self.disconnected_error()
 
-    def show(self, update=None, text=None, kind='action', tags=[], buffer=None):
+    def show(self, update=None, text=None, kind='action', tags=[], show_source=True, buffer=None):
         if buffer == None and isinstance(update, UpdateFailure):
             origin = self.client.origin(update)
             if origin != None and not isinstance(origin, Leave) and not isinstance(origin, Join):
@@ -698,7 +708,7 @@ class Server:
             buffer = self.buffers.get(name, None)
             if buffer == None:
                 buffer = Buffer(self, name)
-        return buffer.show(update=update, text=text, kind=kind, tags=tags)
+        return buffer.show(update=update, text=text, kind=kind, tags=tags, show_source=show_source)
 
 ### Commands
 def check_signature(f, args, command=None):
