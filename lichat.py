@@ -134,7 +134,7 @@ def input_prompt_cb(data, item, current_window, w_buffer, extra_info):
     if buffer == None:
         return ''
     
-    return f"{w.color(w.config_color(w.config_get('irc.color.input_nick')))}{buffer.server.client.username}"
+    return f"{wcfgcolor('irc.color.input_nick')}{buffer.server.client.username}"
 
 def reconnect_cb(data, _remaining):
     server = servers.get(data, None)
@@ -152,7 +152,7 @@ def timeout_cb(data, _remaining):
             server.timeout = w.hook_timer(1000*30, 1, 1, 'timeout_cb', server.name)
         else:
             logger.debug(f"[{server.name}] timeout 2, reconnecting")
-            server.show(text="Timed out, reconnecting...", kind='network')
+            server.show(text="Timed out, reconnecting...", kind='network', show_source=False)
             server.disconnect()
             server.reconnect()
     return w.WEECHAT_RC_OK
@@ -248,7 +248,7 @@ class Buffer:
             self.backfill_state = 'part'
 
         if show:
-            self.show(text='Disconnected.', kind='network')
+            self.show(text='Disconnected.', kind='network', show_source=False)
         w.nicklist_remove_all(self.buffer)
         self.nicklist = None
 
@@ -445,7 +445,10 @@ Returns True if show() should skip displaying the update."""
 
         if update.get('from') and (kind in ["text", "action"]
                                    or w.config_boolean(w.config_get("irc.look.color_nicks_in_server_messages"))):
-            prefix_color = w.color(w.info_get("nick_color_name", update['from']))
+            if update['from'] == self.server.client.username:
+                prefix_color = wcfgcolor('weechat.color.chat_nick_self')
+            else:
+                prefix_color = w.color(w.info_get("nick_color_name", update['from']))
 
         tags = ','.join(tags)
         source = f"{prefix_color}{update.get('from', '')}{w.color('reset')}"
@@ -457,7 +460,9 @@ Returns True if show() should skip displaying the update."""
             source = ""
 
         if kind == 'text':
-            w.prnt_date_tags(self.buffer, time, tags, f"{source}\t{text}")
+            nick_prefix = wcfgstr('weechat.look.nick_prefix', 'weechat.color.chat_nick_prefix')
+            nick_suffix = wcfgstr('weechat.look.nick_suffix', 'weechat.color.chat_nick_suffix')
+            w.prnt_date_tags(self.buffer, time, tags, f"{nick_prefix}{source}{nick_suffix}\t{text}")
             w.buffer_set(self.buffer, 'hotlist', '2')
         else:
             sep = ""
@@ -523,7 +528,7 @@ class Server:
                 self.hook = None
                 if self.config('autoreconnect', bool):
                     cooldown = max(1, self.config('autoreconnect_delay', int))
-                    self.show(text=f"Reconnecting in {cooldown} seconds...", kind='network')
+                    self.show(text=f"Reconnecting in {cooldown} seconds...", kind='network', show_source=False)
                     w.hook_timer(cooldown * 1000, 1, 1, 'reconnect_cb', self.name)
         
         def on_misc(client, update):
@@ -540,7 +545,7 @@ class Server:
                 delta = time.monotonic() - self.ping_sent_at
                 logger.debug(f"Ping reply received after {delta} seconds")
                 if delta > 1.0:
-                    self.show(text=f"Ping reply received after {delta:.4f} seconds", kind='network')
+                    self.show(text=f"Ping reply received after {delta:.4f} seconds", kind='network', show_source=False)
                 self.ping_sent_at = None
 
         def on_message(client, update):
@@ -548,9 +553,9 @@ class Server:
 
         def on_pause(client, update):
             if update.by == 0:
-                self.show(update, text=f"has disabled pause mode in {u.channel}", tags=['no_highlight', 'log3'])
+                self.show(update, text=f"has disabled pause mode in {update.channel}", show_source='bare', tags=['no_highlight', 'log3'])
             else:
-                self.show(update, text=f"has enabled pause mode by {u.by} in {u.channel}", tags=['no_highlight', 'log3'])
+                self.show(update, text=f"has enabled pause mode by {update.by} in {update.channel}", show_source='bare', tags=['no_highlight', 'log3'])
 
         def on_emote(client, update):
             self.client.emotes[update.name].offload(emote_dir)
@@ -561,50 +566,71 @@ class Server:
             if update['from'] != self.client.username:
                 if imgur_client_id != '' and update['content-type'] in imgur_formats:
                     w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
-                    self.show(update, text=f"Sent file {update['filename']} (Uploading...)")
+                    self.show(update, text=f"sent file {update['filename']} (Uploading...)", show_source='bare')
                 elif data_save_directory != '' and (data_save_types == ['all'] or update['content-type'] in data_save_types):
                     data['url'] = f"{data_save_directory}/{time.strftime('%Y.%m.%d-%H-%M-%S')}-{data['filename']}"
                     w.hook_process('func:write_file', 0, 'process_upload', json.dumps(data))
-                    self.show(update, text=f"Sent file {update['filename']} (Saving...)")
+                    self.show(update, text=f"sent file {update['filename']} (Saving...)", show_source='bare')
                 else:
-                    self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})")
+                    self.show(update, text=f"sent file {update['filename']} ({update['content-type']})", show_source='bare')
             else:
-                self.show(update, text=f"Sent file {update['filename']} ({update['content-type']})")
+                self.show(update, text=f"sent file {update['filename']} ({update['content-type']})", show_source='bare')
 
         def on_channel_info(client, update):
             (_, name) = update.key
             tags = ['no_highlight', 'log3']
+            existing = update.get('from') == self.client.servername
+            value_color = ""
+
             if name == 'topic':
                 tags.append('irc_topic')
+                if existing:
+                    value_color = wcfgcolor('irc.color.topic_current')
+                else:
+                    value_color = wcfgcolor('irc.color.topic_new')
+
             text = update.text
             if 256 < len(text):
                 text = text[:253]+"..."
-            buffer = self.show(update, text=f"{name}: {text}", tags=tags, kind='network')
+
+            channel = wcfgcolor('weechat.color.chat_channel', update.channel)
+
+            if existing:
+                buffer = self.show(update, text=f"{name} for {channel} is {value_color}{text!r}{w.color('reset')}",
+                                   tags=tags, kind='network')
+            else:
+                buffer = self.show(update, text=f"has changed {name} for {channel} to {value_color}{text!r}{w.color('reset')}",
+                                   tags=tags, kind='network', show_source='bare')
+
             if name == 'topic':
                 w.buffer_set(buffer.buffer, 'title', update.text)
 
         def on_join(client, update):
-            buffer = self.show(update, text=f"joined {update.channel}", kind='join', tags=['irc_join', 'no_highlight', 'log4'])
+            buffer = self.show(update, text=f"{wcfgcolor('irc.color.message_join', 'has joined')} {wcfgcolor('weechat.color.chat_channel', update.channel)}",
+                               kind='join', show_source='bare', tags=['irc_join', 'no_highlight', 'log4'])
             buffer.join(update['from'])
             if update.channel == self.client.servername:
-                buffer.show(text=f"Supported extensions: {', '.join(self.client.extensions)}", kind='network')
+                buffer.show(text=f"Supported extensions: {', '.join(self.client.extensions)}",
+                            kind='network', show_source=False)
 
         def on_leave(client, update):
-            buffer = self.show(update, text=f"left {update.channel}", kind='quit', tags=['irc_part', 'no_highlight', 'log4'])
+            buffer = self.show(update, text=f"{wcfgcolor('irc.color.message_quit', 'has left')} {wcfgcolor('weechat.color.chat_channel', update.channel)}",
+                               kind='quit', show_source='bare', tags=['irc_part', 'no_highlight', 'log4'])
             if update['from'] == self.client.username:
                 buffer.disconnect(False)
             else:
                 buffer.leave(update['from'])
 
         def on_kick(client, update):
-            self.show(update, text=f"has kicked {update.target} from {update.channel}", kind='quit', tags=['irc_kick', 'no_highlight', 'log4'])
+            self.show(update, text=f"{wcfgcolor('irc.color.message_kick', 'has kicked')} {update.target} from {wcfgcolor('weechat.color.chat_channel', update.channel)}",
+                      kind='quit', show_source='bare', tags=['irc_kick', 'no_highlight', 'log4'])
 
         def on_edit(client, update):
             self.buffers[update.channel].edit(update);
 
         def on_react(client, update):
             ## FIXME: use a separate dedicated reactions line below each message.
-            self.show(update, text=f"{update['from']} reacted with {update.emote}", tags=['no_highlight', 'log4'])
+            self.show(update, text=f"reacted with {update.emote}", tags=['no_highlight', 'log4'], show_source='bare')
 
         def on_users(client, update):
             buffer = self.buffers[update.channel];
@@ -668,11 +694,11 @@ class Server:
     def reconnect(self):
         if self.hook != None: return
         try:
-            self.show(text='Reconnecting...')
+            self.show(text='Reconnecting...', kind='network', show_source=False)
             self.connect()
         except:
             cooldown = max(1, self.config('autoreconnect_delay', int))
-            self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.", kind='network')
+            self.show(text=f"Reconnect failed. Attempting again in {cooldown} seconds.", kind='network', show_source=False)
             w.hook_timer(cooldown * 1000, 1, 1, 'reconnect_cb', self.name)
 
     def delete(self):
