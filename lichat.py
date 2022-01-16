@@ -1379,6 +1379,22 @@ def cfg(section, option, type=str, default=None, evaluate=False):
     elif type == bool: return w.config_boolean(cfg)
     elif type == int: return w.config_integer(cfg)
 
+def wcfgstr(option, coloropt=None):
+    """Get a text string from weechat's (global) config.
+
+The optional 2nd argument specifies another config option which is used to color the text string."""
+    if coloropt is not None:
+        return wcfgcolor(coloropt, wcfgstr(option))
+    return w.config_string(w.config_get(option))
+
+def wcfgcolor(option, text=None):
+    """Get a color code from weechat's (global) config.
+
+The optional 2nd argument specifies a text string which is colored with the color code."""
+    if text:
+        return f"{wcfgcolor(option)}{text}{w.color('reset')}"
+    return w.color(w.config_color(w.config_get(option)))
+
 def server_options(server):
     found = {}
     cfg = config['server']
