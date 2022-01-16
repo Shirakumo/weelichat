@@ -340,7 +340,7 @@ class Buffer:
 
 Returns True if show() should defer the update."""
         if self.backfill_state != 'never':
-            if isinstance(update, Join) and update['from'] == self.server.client.username:
+            if isinstance(update, Join) and self.server.client.is_my_own(update):
                 if self.backfill_time is None and self.backfill_state in ['wait', 'part']:
                     self.backfill_state = 'join'
                     self.backfill_time = update['clock']
@@ -445,7 +445,7 @@ Returns True if show() should skip displaying the update."""
 
         if update.get('from') and (kind in ["text", "action"]
                                    or w.config_boolean(w.config_get("irc.look.color_nicks_in_server_messages"))):
-            if update['from'] == self.server.client.username:
+            if self.server.client.is_my_own(update):
                 prefix_color = wcfgcolor('weechat.color.chat_nick_self')
             else:
                 prefix_color = w.color(w.info_get("nick_color_name", update['from']))
@@ -563,7 +563,7 @@ class Server:
         def on_data(client, update):
             data = update.__dict__
             data['server'] = name
-            if update['from'] != self.client.username:
+            if self.client.is_my_own(update):
                 if imgur_client_id != '' and update['content-type'] in imgur_formats:
                     w.hook_process('func:upload_file', 0, 'process_upload', json.dumps(data))
                     self.show(update, text=f"sent file {update['filename']} (Uploading...)", show_source='bare')
@@ -616,7 +616,7 @@ class Server:
         def on_leave(client, update):
             buffer = self.show(update, text=f"{wcfgcolor('irc.color.message_quit', 'has left')} {wcfgcolor('weechat.color.chat_channel', update.channel)}",
                                kind='quit', show_source='bare', tags=['irc_part', 'no_highlight', 'log4'])
-            if update['from'] == self.client.username:
+            if self.client.is_my_own(update):
                 buffer.disconnect(False)
             else:
                 buffer.leave(update['from'])
