@@ -947,7 +947,7 @@ def kill_command_cb(buffer, target):
 
 @lichat_command('destroy', '%(lichat_channel) %-', 'Destroys a channel immediately.  If no channel name is given, defaults to the current channel.')
 def destroy_command_cb(buffer, channel=None):
-    buffer.send_confirm(f"The user {target} has been killed.",
+    buffer.send_confirm(f"The channel {channel} has been killed.",
                         Destroy, channel=channel)
 
 @lichat_command('ban', '%(nicks) %-', 'Bans the given user from the server by username.')
