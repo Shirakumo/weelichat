@@ -463,7 +463,8 @@ Returns True if show() should skip displaying the update."""
             nick_prefix = wcfgstr('weechat.look.nick_prefix', 'weechat.color.chat_nick_prefix')
             nick_suffix = wcfgstr('weechat.look.nick_suffix', 'weechat.color.chat_nick_suffix')
             w.prnt_date_tags(self.buffer, time, tags, f"{nick_prefix}{source}{nick_suffix}\t{text}")
-            w.buffer_set(self.buffer, 'hotlist', '2')
+            if not self.server.client.is_my_own(update):
+                w.buffer_set(self.buffer, 'hotlist', '2')
         else:
             sep = ""
             if len(source) > 0:
@@ -473,7 +474,8 @@ Returns True if show() should skip displaying the update."""
                     sep = ": "
 
             w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}{sep}{text}")
-            w.buffer_set(self.buffer, 'hotlist', '1')
+            if not self.server.client.is_my_own(update):
+                w.buffer_set(self.buffer, 'hotlist', '1')
         return self
 
     def edit(self, update, text=None):
