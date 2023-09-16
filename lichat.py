@@ -195,7 +195,8 @@ def edit_buffer(w_buffer, matcher, new_text):
 
 def buffer_backfill_timeout_cb(data, _remaining):
     buffer = weechat_buffer_to_representation(data)
-    buffer.backfill_timeout()
+    if buffer is not None:
+        buffer.backfill_timeout()
     return w.WEECHAT_RC_OK
 
 class Buffer:
