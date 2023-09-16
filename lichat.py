@@ -846,6 +846,7 @@ def try_connect(w_buffer, server):
 
 @raw_command('connect', '%(lichat_server)', 'Connect to a lichat server. If no server name is passed, all servers are connected. If a hostname is passed, a new server connection is created.')
 def connect_command_cb(w_buffer, name=None, host=None, port=None, username=None, password=None, ssl=None):
+    config_updated(full=False)
     if name == None:
         buf = weechat_buffer_to_representation(w_buffer)
         if buf is not None:
@@ -889,6 +890,7 @@ def disconnect_command_cb(buffer, server=None):
     else:
         server = buffer.server
     server.disconnect()
+    config_updated(full=False)
 
 @raw_command('help', '%(lichat_command) %-', 'Display help information about lichat commands.')
 def help_command_cb(w_buffer, topic=None):
@@ -1479,9 +1481,10 @@ def config_updated(full=False):
         if logfilehandler is not None:
             logging.root.removeHandler(logfilehandler)
             logfilehandler = None
-
-    if not full:
-        return
+    
+    for server in list(servers.keys()):
+        if not servers[server].is_connected():
+            del servers[server]
 
     for serverkey, sconf in servers_options().items():
         server = w.config_string(sconf['name']) or serverkey
