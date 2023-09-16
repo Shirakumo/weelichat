@@ -896,20 +896,25 @@ def disconnect_command_cb(buffer, server=None):
 @raw_command('help', '%(lichat_command) %-', 'Display help information about lichat commands.')
 def help_command_cb(w_buffer, topic=None):
     if topic == None:
+        w.prnt("", "/lichat <command> [<arguments>]")
+        w.prnt("", "")
+        w.prnt("", "lichat commands")
+        w.prnt("", "")
+        cmd_len = max(len(x) for x in commands)
         for name in sorted(commands):
             command = commands[name]
-            w.prnt(w_buffer, f"{name}\t{command['description']}")
+            w.prnt("", f"\t  {name:<{cmd_len}}  {(command['description'] or ' ').splitlines()[0]}")
     else:
         command = commands.get(topic, None)
         if command == None:
-            w.prnt(w_buffer, f"{w.prefix('error')} No such command {command}")
+            w.prnt("", f"{w.prefix('error')} No such command {command}")
         else:
             sig = signature(command['func'])
             parameters = sig.parameters.copy()
             parameters.popitem(last=False)
             sig = sig.replace(parameters=parameters.values())
-            w.prnt(w_buffer, f"/lichat {command['name']} {sig}")
-            w.prnt(w_buffer, f"{command['description']}")
+            w.prnt("", f"/lichat {command['name']} {sig}")
+            w.prnt("", f"{command['description']}")
 
 @lichat_command('join', '%(lichat_channel) %-', 'Join an existing channel.')
 def join_command_cb(buffer, channel=None):
@@ -965,7 +970,7 @@ def channel_info_command_cb(buffer, key='T', channel=None):
     key = pylichat.wire.from_string(key)
     buffer.send(ChannelInfo, channel=channel, key=key)
 
-@lichat_command('topic', 'View or set the topic of the current channel.')
+@lichat_command('topic', '', 'View or set the topic of the current channel.')
 def topic_command_cb(buffer, *topic):
     if len(topic) == 0:
         topic = buffer.info(kw('topic'))
