@@ -1332,6 +1332,11 @@ def process_upload(_data, _command, return_code, out, err):
     return w.WEECHAT_RC_OK
 
 ### Completion
+def command_completion_cb(_data, item, w_buffer, completion):
+    for k in commands.keys():
+        w.hook_completion_list_add(completion, k, 0, w.WEECHAT_LIST_POS_SORT)
+    return w.WEECHAT_RC_OK
+
 def channel_completion_cb(_data, item, w_buffer, completion):
     buffer = weechat_buffer_to_representation(w_buffer)
     if buffer == None: return w.WEECHAT_RC_OK
@@ -1684,6 +1689,7 @@ if __name__ == '__main__' and import_ok:
 
         w.bar_item_new('input_prompt', '(extra)input_prompt_cb', '')
 
+        w.hook_completion('lichat_command', 'complete Lichat commands', 'command_completion_cb', '')
         w.hook_completion('lichat_channel', 'complete Lichat channel names', 'channel_completion_cb', '')
         w.hook_completion('lichat_server', 'complete Lichat server names', 'server_completion_cb', '')
         w.hook_completion('lichat_update', 'complete Lichat update types', 'update_completion_cb', '')
