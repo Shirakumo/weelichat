@@ -1068,8 +1068,8 @@ def deny_command_cb(buffer, update, target=None, channel=None):
         buffer.send_confirm(f"All users have been denied from {update}ing",
                             Permissions, channel=channel, permissions=[[type, [li('+'), buffer.server.client.username]]])
     else:
-        buffer.send_confrm(f"{target} has been denied from {update}ing",
-                           Deny, channel=channel, target=target, update=type)
+        buffer.send_confirm(f"{target} has been denied from {update}ing",
+                            Deny, channel=channel, target=target, update=type)
 
 @lichat_command('send', '%(filename) %(lichat_channel) %-', 'Send a local file or file from an URL as a data upload. If no channel name is given, defaults to the current channel.')
 def send_command_cb(buffer, file, channel=None):
