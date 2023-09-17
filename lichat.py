@@ -287,9 +287,9 @@ class Buffer:
 
         # FIXME: figure out how to do this safely so that log files get folded in nicely
         # obvious failure mode is two anon channels with the same pair of participants
-        if multiplicity == 1:
+        # if multiplicity == 1:
             # self.name = f'{user}'
-        else:
+        # else:
             # self.name = self.channel
         # w.buffer_set(self.buffer, 'name', self.w_name())
 
@@ -303,7 +303,7 @@ class Buffer:
             w.buffer_set(self.buffer, 'title', title or f'DM with {next(iter(user))} ({self.channel})')
         else:
             w.buffer_set(self.buffer, 'short_name', title or self.name)
-            w.buffer_set(self.buffer, 'title', title)
+            w.buffer_set(self.buffer, 'title', title or '')
         self.title = title
 
     def join(self, user):
