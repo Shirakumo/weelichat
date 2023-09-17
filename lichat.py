@@ -226,6 +226,8 @@ class Buffer:
         w.buffer_set(self.buffer, 'localvar_set_nick', server.client.username)
         if server.client.servername == channel:
             w.buffer_set(self.buffer, 'localvar_set_type', 'server')
+        elif self.is_query():
+            w.buffer_set(self.buffer, 'localvar_set_type', 'private')
         else:
             w.buffer_set(self.buffer, 'localvar_set_type', 'channel')
         w.buffer_set(self.buffer, 'localvar_set_lichat_server', server.name)
@@ -310,7 +312,7 @@ class Buffer:
         w.buffer_set(self.buffer, 'display', '1')
     
     def is_query(self):
-        return self.channel.startswith('@') # and len(self.server.client.channels[self.channel].users) == 2
+        return self.channel.startswith('@')
 
     def backfill_message(self, text):
         w.prnt_date_tags(self.buffer, 0, "no_log", f"\t\t---------------- {text} ----------------")
@@ -460,7 +462,6 @@ Returns True if show() should skip displaying the update."""
             else:
                 prefix_color = w.color(w.info_get("nick_color_name", update['from']))
 
-        tags = ','.join(tags)
         source = f"{prefix_color}{update.get('from', '')}{w.color('reset')}"
 
         if update.get('bridge'):
@@ -469,15 +470,20 @@ Returns True if show() should skip displaying the update."""
         if show_source is False:
             source = ""
 
+        if self.server.client.is_my_own(update):
+            tags += ['notify_none', 'self_msg', 'no_highlight']
+
         if kind == 'text':
             nick_prefix = wcfgstr('weechat.look.nick_prefix', 'weechat.color.chat_nick_prefix')
             nick_suffix = wcfgstr('weechat.look.nick_suffix', 'weechat.color.chat_nick_suffix')
-            w.prnt_date_tags(self.buffer, time, tags, f"{nick_prefix}{source}{nick_suffix}\t{text}")
+
             if not self.server.client.is_my_own(update):
-                level = w.WEECHAT_HOTLIST_MESSAGE
                 if self.is_query():
-                    level = w.WEECHAT_HOTLIST_PRIVATE
-                w.buffer_set(self.buffer, 'hotlist', level)
+                    tags += ['notify_private']
+                else:
+                    tags += ['notify_message']
+
+            w.prnt_date_tags(self.buffer, time, ','.join(tags), f"{nick_prefix}{source}{nick_suffix}\t{text}")
         else:
             sep = ""
             if len(source) > 0:
@@ -486,9 +492,7 @@ Returns True if show() should skip displaying the update."""
                 else:
                     sep = ": "
 
-            w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}{sep}{text}")
-            if not self.server.client.is_my_own(update):
-                w.buffer_set(self.buffer, 'hotlist', w.WEECHAT_HOTLIST_LOW)
+            w.prnt_date_tags(self.buffer, time, ','.join(tags), f"{w.prefix(kind)}{source}{sep}{text}")
 
         if in_regards_to is not None:
             w.prnt_date_tags(self.buffer, time, 'no_highlight', in_regards_to)
@@ -569,7 +573,7 @@ class Server:
                 self.ping_sent_at = None
 
         def on_message(client, update):
-            buffer = self.show(update, kind='text', tags=['notify_message', 'irc_privmsg', 'log1'])
+            buffer = self.show(update, kind='text', tags=['irc_privmsg', 'log1'])
 
         def on_pause(client, update):
             if update.by == 0:
