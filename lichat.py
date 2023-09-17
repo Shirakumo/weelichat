@@ -113,7 +113,11 @@ def lichat_buffer_input_cb(_data, w_buffer, input_data):
 def lichat_buffer_close_cb(_data, w_buffer):
     buffer = weechat_buffer_to_representation(w_buffer)
     if buffer.server.is_connected():
-        buffer.send(Leave)
+        def cb(client, prev, update):
+            if isinstance(update, Failure):
+                buffer.server.show(update, kind='error')
+            raise pylichat.SwallowUpdate()
+        buffer.send_cb(cb, Leave)
     buffer.delete()
     return w.WEECHAT_RC_OK
 
