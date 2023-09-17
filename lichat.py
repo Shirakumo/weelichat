@@ -941,7 +941,7 @@ def leave_command_cb(buffer, channel=None):
     buffer.send(Leave, channel=channel)
 
 @lichat_command('create', '', 'Create a new channel. If no name is given, an anonymous channel is created.')
-def create_command_cb(buffer, channel=''):
+def create_command_cb(buffer, channel=None):
     buffer.send(Create, channel=channel)
 
 @lichat_command('pull', '%(nicks) %(lichat_channel) %-', 'Pull another user into a channel. If no channel name is given, defaults to the current channel.')
