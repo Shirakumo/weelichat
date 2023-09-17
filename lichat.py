@@ -528,8 +528,9 @@ class Server:
 
         def on_connect(client, update):
             for channel in self.config('autojoin', str, '').split('  '):
-                logger.debug(f"autojoining {channel!r}")
-                self.send(Join, channel=channel)
+                if channel != '':
+                    logger.debug(f"autojoining {channel!r}")
+                    self.send(Join, channel=channel)
 
         def on_disconnect(client, update):
             for channel in self.buffers:
