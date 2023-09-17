@@ -468,7 +468,7 @@ Returns True if show() should skip displaying the update."""
             nick_suffix = wcfgstr('weechat.look.nick_suffix', 'weechat.color.chat_nick_suffix')
             w.prnt_date_tags(self.buffer, time, tags, f"{nick_prefix}{source}{nick_suffix}\t{text}")
             if not self.server.client.is_my_own(update):
-                w.buffer_set(self.buffer, 'hotlist', '2')
+                w.buffer_set(self.buffer, 'hotlist', w.WEECHAT_HOTLIST_MESSAGE)
         else:
             sep = ""
             if len(source) > 0:
@@ -479,7 +479,7 @@ Returns True if show() should skip displaying the update."""
 
             w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}{sep}{text}")
             if not self.server.client.is_my_own(update):
-                w.buffer_set(self.buffer, 'hotlist', '1')
+                w.buffer_set(self.buffer, 'hotlist', w.WEECHAT_HOTLIST_LOW)
 
         if in_regards_to is not None:
             w.prnt_date_tags(self.buffer, time, 'no_highlight', in_regards_to)
