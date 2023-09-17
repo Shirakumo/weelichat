@@ -236,6 +236,8 @@ class Buffer:
         w.buffer_set(self.buffer, 'localvar_set_lichat_complete_prefix', '')
         server.buffers[channel] = self
 
+        self.multiplicity = 0
+
         self.backfill_time = None
         self.backfill_deferred = []
         self.backfill_timeout_hook = None
@@ -258,12 +260,52 @@ class Buffer:
         w.nicklist_remove_all(self.buffer)
         self.nicklist = None
 
+    def update_multiplicity(self):
+        """Called whenever the number of users in a channel changes, to update title/nicklist/etc.
+        
+        0: unknown/empty
+        1: one-on-one dm
+        2: multi-party dm/channel
+        """
+        channel = self.server.client.channels[self.channel]
+        # users except for me
+        users = channel.users - {self.server.client.username}
+
+        multiplicity = 0
+        if self.is_query() and len(users) == 1:
+            multiplicity = 1
+        elif len(users) > 1:
+            multiplicity = 2
+
+        if self.multiplicity == multiplicity:
+            # unchanged
+            return
+
+        w.buffer_set(self.buffer, 'nicklist', '0' if multiplicity < 2 else '1')
+
+        if multiplicity == 1:
+            user = next(iter(users))
+            w.buffer_set(self.buffer, 'short_name', f' {user}')
+            w.buffer_set(self.buffer, 'title', f'DM with {user} ({self.channel})')
+            # FIXME: figure out how to do this safely so that log files get folded in nicely
+            # obvious failure mode is two anon channels with the same pair of participants
+
+            # self.name = f'{user}'
+            # w.buffer_set(self.buffer, 'name', self.w_name())
+        else:
+            w.buffer_set(self.buffer, 'short_name', self.name)
+            w.buffer_set(self.buffer, 'title', channel.info.get('topic', ''))
+            # self.name = self.channel
+            # w.buffer_set(self.buffer, 'name', self.w_name())
+
     def join(self, user):
+        self.update_multiplicity()
         if self.nicklist == None:
             self.nicklist = w.nicklist_add_group(self.buffer, '', 'Users', 'weechat.color.nicklist_group', 1)
         w.nicklist_add_nick(self.buffer, self.nicklist, user, 'bar_fg', '', 'bar_fg', 1)
 
     def leave(self, user):
+        self.update_multiplicity()
         if self.nicklist != None:
             nick = w.nicklist_search_nick(self.buffer, '', user)
             if nick != None:
