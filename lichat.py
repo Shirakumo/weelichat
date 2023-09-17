@@ -433,13 +433,16 @@ Returns True if show() should skip displaying the update."""
                 tags.append(f"lichat_from_{update['from']}")
                 tags.append(f"nick_{update['from'].replace(' ','_')}")
 
+        # if known, show the update which caused the failure on its own line
+        in_regards_to = None
+
         if text is None:
             if isinstance(update, Update):
                 text = update.get('text', f"Update of type {type(update).__name__}")
                 if isinstance(update, UpdateFailure):
                     origin = self.server.client.origin(update)
                     if origin != None:
-                        text = f"{text}\n{w.prefix('network')}{w.color('gray')}in regards to {origin}"
+                        in_regards_to = f"{w.prefix('network')}{w.color('gray')}in regards to {pylichat.wire.to_string(origin.to_list())}"
                         tags.append('no_highlight')
             else:
                 text = f"BUG: Supposed to show non-update {update}"
@@ -477,6 +480,10 @@ Returns True if show() should skip displaying the update."""
             w.prnt_date_tags(self.buffer, time, tags, f"{w.prefix(kind)}{source}{sep}{text}")
             if not self.server.client.is_my_own(update):
                 w.buffer_set(self.buffer, 'hotlist', '1')
+
+        if in_regards_to is not None:
+            w.prnt_date_tags(self.buffer, time, 'no_highlight', in_regards_to)
+
         return self
 
     def edit(self, update, text=None):
