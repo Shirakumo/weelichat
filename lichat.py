@@ -308,6 +308,9 @@ class Buffer:
 
     def display(self):
         w.buffer_set(self.buffer, 'display', '1')
+    
+    def is_query(self):
+        return self.channel.startswith('@') # and len(self.server.client.channels[self.channel].users) == 2
 
     def backfill_message(self, text):
         w.prnt_date_tags(self.buffer, 0, "no_log", f"\t\t---------------- {text} ----------------")
@@ -471,7 +474,10 @@ Returns True if show() should skip displaying the update."""
             nick_suffix = wcfgstr('weechat.look.nick_suffix', 'weechat.color.chat_nick_suffix')
             w.prnt_date_tags(self.buffer, time, tags, f"{nick_prefix}{source}{nick_suffix}\t{text}")
             if not self.server.client.is_my_own(update):
-                w.buffer_set(self.buffer, 'hotlist', w.WEECHAT_HOTLIST_MESSAGE)
+                level = w.WEECHAT_HOTLIST_MESSAGE
+                if self.is_query():
+                    level = w.WEECHAT_HOTLIST_PRIVATE
+                w.buffer_set(self.buffer, 'hotlist', level)
         else:
             sep = ""
             if len(source) > 0:
