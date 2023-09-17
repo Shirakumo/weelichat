@@ -218,7 +218,6 @@ class Buffer:
         w.buffer_set(self.buffer, 'nicklist_display_groups', '0')
         w.buffer_set(self.buffer, 'short_name', name)
         w.buffer_set(self.buffer, 'type', 'formatted')
-        w.buffer_set(self.buffer, 'notify', '1')
         w.buffer_set(self.buffer, 'filter', '1')
         w.buffer_set(self.buffer, 'input_multiline', '1')
         w.buffer_set(self.buffer, 'highlight_words', ','.join(server.highlight()))
