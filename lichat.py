@@ -210,6 +210,7 @@ class Buffer:
         self.server = server
         self.channel = channel
         self.nicklist = None
+        self.title = None
         self.buffer = w.buffer_new(self.w_name(),
                                    'lichat_buffer_input_cb', '',
                                    'lichat_buffer_close_cb', '')
@@ -282,21 +283,28 @@ class Buffer:
             return
 
         w.buffer_set(self.buffer, 'nicklist', '0' if multiplicity < 2 else '1')
+        self.update_title(self.title)
 
+        # FIXME: figure out how to do this safely so that log files get folded in nicely
+        # obvious failure mode is two anon channels with the same pair of participants
         if multiplicity == 1:
-            user = next(iter(users))
-            w.buffer_set(self.buffer, 'short_name', f' {user}')
-            w.buffer_set(self.buffer, 'title', f'DM with {user} ({self.channel})')
-            # FIXME: figure out how to do this safely so that log files get folded in nicely
-            # obvious failure mode is two anon channels with the same pair of participants
-
             # self.name = f'{user}'
-            # w.buffer_set(self.buffer, 'name', self.w_name())
         else:
-            w.buffer_set(self.buffer, 'short_name', self.name)
-            w.buffer_set(self.buffer, 'title', channel.info.get('topic', ''))
             # self.name = self.channel
-            # w.buffer_set(self.buffer, 'name', self.w_name())
+        # w.buffer_set(self.buffer, 'name', self.w_name())
+
+    def update_title(self, title):
+        if self.multiplicity == 1:
+            # users except for me
+            users = self.server.client.channels[self.channel].users - {self.server.client.username}
+            # the other person in the DM
+            user = next(iter(users))
+            w.buffer_set(self.buffer, 'short_name', title or f' {user}')
+            w.buffer_set(self.buffer, 'title', title or f'DM with {next(iter(user))} ({self.channel})')
+        else:
+            w.buffer_set(self.buffer, 'short_name', title or self.name)
+            w.buffer_set(self.buffer, 'title', title)
+        self.title = title
 
     def join(self, user):
         self.update_multiplicity()
@@ -650,6 +658,8 @@ class Server:
 
             if name == 'topic':
                 tags.append('irc_topic')
+
+            if name in ['topic', 'title']:
                 if existing:
                     value_color = wcfgcolor('irc.color.topic_current')
                 else:
@@ -670,6 +680,9 @@ class Server:
 
             if name == 'topic':
                 w.buffer_set(buffer.buffer, 'title', update.text)
+
+            if name == 'title':
+                buffer.update_title(update.text)
 
         def on_join(client, update):
             buffer = self.show(update, text=f"{wcfgcolor('irc.color.message_join', 'has joined')} {wcfgcolor('weechat.color.chat_channel', update.channel)}",
