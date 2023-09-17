@@ -967,7 +967,10 @@ def set_channel_info_command_cb(buffer, key, *value):
 
 @lichat_command('channel-info', '%(lichat_channel_key)|T %(lichat_channel) %-', 'Retrieve channel information. If no channel name is given, defaults to the current channel. If no key is given, all channel info is requested.')
 def channel_info_command_cb(buffer, key='T', channel=None):
-    keys = pylichat.wire.from_string(key)[0]
+    keys = key
+    if keys != 'T':
+        keys = f'({keys})'
+    keys = pylichat.wire.from_string(keys)[0]
     buffer.send(ChannelInfo, channel=channel, keys=keys)
 
 @lichat_command('topic', '', 'View or set the topic of the current channel.')
