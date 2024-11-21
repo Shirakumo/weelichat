@@ -1,0 +1,38 @@
+name: Build Release
+on: [create, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout weelichat
+        uses: actions/checkout@v4
+        with:
+          repository: shirakumo/weelichat
+          path: weelichat
+      - name: Checkout py-lichat
+        uses: actions/checkout@v4
+        with:
+          repository: shirakumo/py-lichat
+          path: pylichat
+      - uses: getsentry/action-setup-venv@v2.1.0
+        id: venv
+        with:
+          python-version: 3.7.13
+          install-cmd: pip install pinliner
+      - name: Compile release
+        run: |
+          source .venv/bin/activate
+          pinliner weelichat pylichat -d lichat -o weelichat.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weelichat.py
+          path: weelichat.py
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        continue-on-error: true
+        with:
+          allowUpdates: true
+          name: Release ${{ github.ref_name }}
+          artifacts: weelichat.py
