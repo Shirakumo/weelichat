@@ -1,7 +1,7 @@
 # About
-This is a Weechat script to connect to [Lichat](https://shirakumo.github.io/lichat) servers. It has support for most Lichat extensions, including data sending and receiving.
+This is a Weechat script to connect to [Lichat](https://shirakumo.org/docs/lichat) servers. It has support for most Lichat extensions, including data sending and receiving.
 
-Make sure you have [pylichat](https://github.com/shirakumo/py-lichat) available in your Python3 path. You can either clone it, or install it via [pip](https://pypi.org/project/pylichat/).
+Make sure you have [pylichat](https://shirakumo.org/project/py-lichat) available in your Python3 path. You can either clone it, or install it via [pip](https://pypi.org/project/pylichat/).
 
 The script has help for all of its commands under the `/lichat` prefix, and adds hooks to replace most standard IRC commands while in a Lichat buffer.
 
